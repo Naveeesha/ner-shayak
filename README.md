@@ -31,7 +31,7 @@ Everything below is a genuinely working implementation, not mockups:
   hardware telemetry unit — appropriate for a driver's phone, not for unattended
   cargo trackers (which would need a separate IoT/SIM tracker integration).
 - **SQLite** is used for simplicity and portability. For real regional deployment,
-  swap in PostgreSQL/PostGIS (`better-sqlite3` → `pg`, minimal query changes).
+  swap in PostgreSQL/PostGIS (`node:sqlite` → `pg`, minimal query changes).
 - The weather API call is blocked in *this development sandbox's* network
   allowlist, so routes computed here may show `weatherSeverity: 0` — it works
   normally once run outside the sandbox (verified against the live Open-Meteo API
@@ -57,6 +57,11 @@ ner-sahayak/
     src/App.jsx / App.css         Role-based workspace shell
 ```
 
+## Prerequisites
+
+- **Node.js 22 or newer** — the backend uses `node:sqlite`, a built-in module available from Node 22+. Check with `node --version`.
+- No other global tools required.
+
 ## Running it
 
 ### 1. Backend
@@ -65,7 +70,15 @@ cd backend
 npm install
 npm start            # http://localhost:4000
 ```
-On first run it creates `ner_sahayak.db` (SQLite) and seeds 4 demo accounts
+
+**Optional — set a JWT secret before running in production:**
+```bash
+# Create backend/.env
+echo "JWT_SECRET=your-long-random-secret-here" > .env
+```
+If `JWT_SECRET` is not set, the server starts with a hardcoded insecure default and logs a warning. Fine for local development; always set it before deploying.
+
+On first run the server creates `ner_sahayak.db` (SQLite) and seeds 4 demo accounts
 (password for all: `sahayak123`):
 - `arjun@ner-sahayak.in` — driver
 - `priya@ner-sahayak.in` — field officer
@@ -76,12 +89,12 @@ On first run it creates `ner_sahayak.db` (SQLite) and seeds 4 demo accounts
 ```bash
 cd frontend
 npm install
-cp .env.example .env   
+cp .env.example .env   # sets REACT_APP_API_URL=http://localhost:4000
 npm start               # http://localhost:3000
 ```
 
-Sign in with any demo account above, or register a new profile for any of the
-four roles from the sign-up screen.
+Open http://localhost:3000 — click a profile card to log in instantly, or use
+"Create a profile" to register a new account for any role.
 
 ## Role-based workspaces
 
@@ -133,7 +146,7 @@ sqlite3 backend/ner_sahayak.db "SELECT name, email, role, district, createdAt FR
 
 ## Extending toward production
 
-1. Swap SQLite → PostgreSQL/PostGIS for concurrent multi-region write load.
+1. Swap `node:sqlite` → PostgreSQL/PostGIS for concurrent multi-region write load.
 2. Replace the rules-based risk model in `utils/dijkstra.js` with a trained
    ML model (e.g. gradient-boosted risk classifier on historical incident +
    rainfall + terrain data), keeping the same `edgeWeight()` interface.
