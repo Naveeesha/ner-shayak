@@ -54,6 +54,11 @@ router.patch('/:id/status', requireAuth, (req, res) => {
   if (!['planned', 'in_transit', 'delivered', 'delayed', 'cancelled'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
+  const existing = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Shipment not found' });
+  if (req.user.role !== 'official' && existing.createdBy !== req.user.id) {
+    return res.status(403).json({ error: 'You do not have permission to update this shipment' });
+  }
   db.prepare('UPDATE shipments SET status = ? WHERE id = ?').run(status, req.params.id);
   const row = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
   res.json({ shipment: { ...row, route: row.routeJson ? JSON.parse(row.routeJson) : null } });

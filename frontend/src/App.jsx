@@ -462,7 +462,7 @@ function RegionStrip({ navigate }) {
     <section className="region">
       <div><i/>Regional status <b>{summary ? (summary.regionAccessCoveragePct >= 85 ? 'Stable' : summary.regionAccessCoveragePct >= 60 ? 'Watchful' : 'Disrupted') : 'Loading'}</b></div>
       <p>
-        <span><b>{summary?.totalVehicles ?? '—'}</b> active routes</span>
+        <span><b>{summary?.activeVehicles ?? '—'}</b> active routes</span>
         <span><b>{summary ? `${summary.regionAccessCoveragePct}%` : '—'}</b> access coverage</span>
         <span><b>{summary?.openFieldReports ?? '—'}</b> need attention</span>
       </p>

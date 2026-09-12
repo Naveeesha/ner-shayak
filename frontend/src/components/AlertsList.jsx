@@ -12,7 +12,7 @@ export default function AlertsList({ notify }) {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ type: 'Route update', tone: 'blue', icon: 'route', title: '', text: '', road: '', severity: 'minor' });
 
-  const load = () => api.alerts().then((res) => setAlerts(res.alerts)).catch((err) => setError(err.message));
+  const load = () => api.alerts().then((res) => { setAlerts(res.alerts); setError(''); }).catch((err) => setError(err.message));
 
   useEffect(() => {
     load();
