@@ -40,6 +40,9 @@ router.post('/:id/ping', requireAuth, (req, res) => {
   if (lat === undefined || lng === undefined) return res.status(400).json({ error: 'lat and lng are required' });
   const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
   if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
+  if (req.user.role !== 'official' && vehicle.ownerId !== req.user.id) {
+    return res.status(403).json({ error: 'You do not have permission to update this vehicle' });
+  }
   db.prepare('UPDATE vehicles SET lat = ?, lng = ?, status = COALESCE(?, status), lastUpdated = ? WHERE id = ?')
     .run(lat, lng, status || null, new Date().toISOString(), req.params.id);
   const updated = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
