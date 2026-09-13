@@ -21,6 +21,11 @@ router.post('/', requireAuth, requireRole('field', 'logistics', 'official'), (re
 });
 
 router.delete('/:id', requireAuth, requireRole('official', 'field', 'logistics'), (req, res) => {
+  const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(req.params.id);
+  if (!alert) return res.status(404).json({ error: 'Alert not found' });
+  if (req.user.role !== 'official' && alert.createdBy !== req.user.id) {
+    return res.status(403).json({ error: 'You do not have permission to delete this alert' });
+  }
   db.prepare('DELETE FROM alerts WHERE id = ?').run(req.params.id);
   res.json({ ok: true });
 });

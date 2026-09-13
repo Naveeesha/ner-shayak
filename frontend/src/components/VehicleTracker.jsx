@@ -11,7 +11,7 @@ export default function VehicleTracker({ notify }) {
   const load = () => api.vehicles().then((res) => setVehicles(res.vehicles)).catch(() => {});
 
   useEffect(() => {
-    api.nodes().then((res) => setNodes(res.nodes));
+    api.nodes().then((res) => setNodes(res.nodes)).catch(() => {});
     load();
     const interval = setInterval(load, 15000);
     const watcherMap = watchers.current;

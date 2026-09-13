@@ -45,6 +45,7 @@ router.get('/summary', requireAuth, async (req, res) => {
         (r.fromNode === e.from && r.toNode === e.to) || (r.fromNode === e.to && r.toNode === e.from) || r.road === e.road);
       const weatherSeverity = Math.max(weatherByNode[e.from] || 0, weatherByNode[e.to] || 0);
       const riskScore = relevant.length * 25 + weatherSeverity * 40;
+      if (!nodeMap[e.from] || !nodeMap[e.to]) return null;
       return {
         from: nodeMap[e.from].name,
         to: nodeMap[e.to].name,
@@ -54,7 +55,7 @@ router.get('/summary', requireAuth, async (req, res) => {
         activeReports: relevant.length,
         weatherSeverity: Number(weatherSeverity.toFixed(2)),
       };
-    }).filter((b) => b.riskScore > 15).sort((a, b) => b.riskScore - a.riskScore).slice(0, 8);
+    }).filter((b) => b !== null && b.riskScore > 15).sort((a, b) => b.riskScore - a.riskScore).slice(0, 8);
 
     res.json({
       generatedAt: new Date().toISOString(),

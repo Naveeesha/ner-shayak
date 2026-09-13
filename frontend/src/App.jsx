@@ -49,6 +49,15 @@ const emptySignup = {
   organisation: '', vehicleNumber: '', state: 'Assam', district: '', language: 'en', hub: '', department: '',
 };
 
+const DEMO_PROFILES = [
+  { role: 'driver',    name: 'Arjun Bora',   email: 'arjun@ner-sahayak.in',  organisation: 'Independent Operator',   detail: 'AS 01 K 4309 · Kamrup Metro' },
+  { role: 'field',     name: 'Priya Deka',   email: 'priya@ner-sahayak.in',  organisation: 'PWD Field Unit, Nagaon', detail: 'Nagaon, Assam' },
+  { role: 'logistics', name: 'Rohan Sharma', email: 'rohan@ner-sahayak.in',  organisation: 'NER Freight Movers',     detail: 'Khanapara Hub · Kamrup' },
+  { role: 'official',  name: 'Ananya Gogoi', email: 'ananya@ner-sahayak.in', organisation: 'DoNER Regional Office',  detail: 'Disaster Management, Assam' },
+];
+const ROLE_LABEL = { driver: 'Driver', field: 'Field officer', logistics: 'Logistics', official: 'Official' };
+const nameInitials = (name) => name.split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
+
 function Brand({ light = false }) {
   return <div className={`brand ${light ? 'light' : ''}`}><div className="brand-mark"><Icon n="logo" s={20}/></div><div><strong>ner-sahayak</strong><span>intelligence network</span></div></div>;
 }
@@ -85,42 +94,50 @@ function AuthShell({ children, intro }) {
 
 function Login({ onSignup }) {
   const { login } = useAuth();
-  const [role, setRole] = useState('driver');
-  const [email, setEmail] = useState('arjun@ner-sahayak.in');
-  const [password, setPassword] = useState('sahayak123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [seen, setSeen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [selectedCard, setSelectedCard] = useState(null);
   const [error, setError] = useState('');
 
-  const fillDemo = (id) => {
-    const emails = {
-      driver: 'arjun@ner-sahayak.in', field: 'priya@ner-sahayak.in',
-      logistics: 'rohan@ner-sahayak.in', official: 'ananya@ner-sahayak.in',
-    };
-    setRole(id); setEmail(emails[id]); setPassword('sahayak123'); setError('');
+  const loginAsProfile = async (profile) => {
+    setError(''); setSelectedCard(profile.email); setBusy(true);
+    try {
+      await login(profile.email, 'sahayak123');
+    } catch (err) {
+      setError(err.message); setBusy(false); setSelectedCard(null);
+    }
   };
 
   const submit = async (event) => {
     event.preventDefault();
     setError(''); setBusy(true);
     try {
-      const account = await login(email, password);
-      if (account.role !== role) setRole(account.role);
+      await login(email, password);
     } catch (err) {
-      setError(err.message);
-      setBusy(false);
+      setError(err.message); setBusy(false);
     }
   };
 
   return (
-    <AuthShell intro={<div className="login-intro"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Choose your role, then continue with your official NER-Sahayak account.</p></div>}>
-      <div className="role-picker">
-        {roles.map((item) => (
-          <button type="button" key={item.id} onClick={() => fillDemo(item.id)} className={item.id === role ? 'active' : ''}>
-            <span><Icon n={item.icon} s={17}/></span>{item.label}{item.id === role && <i><Icon n="check" s={12}/></i>}
+    <AuthShell intro={<div className="login-intro"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Select your profile to continue, or sign in manually below.</p></div>}>
+      <div className="login-profiles">
+        {DEMO_PROFILES.map((p) => (
+          <button key={p.email} type="button" className={`login-profile-card${selectedCard === p.email ? ' active' : ''}`} onClick={() => loginAsProfile(p)} disabled={busy}>
+            <div className="lp-avatar">{nameInitials(p.name)}</div>
+            <div className="lp-info">
+              <strong>{p.name}</strong>
+              <span className="lp-role">{ROLE_LABEL[p.role]}</span>
+              <span className="lp-detail">{p.organisation}</span>
+              <span className="lp-sub">{p.detail}</span>
+            </div>
+            {selectedCard === p.email && <span className="lp-loading"/>}
           </button>
         ))}
       </div>
+      {error && <p className="form-error" role="alert" style={{marginBottom: '4px'}}>{error}</p>}
+      <div className="login-divider"><span>or sign in manually</span></div>
       <form onSubmit={submit} className="login-form">
         <label>Work email<input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" required/></label>
         <label>Password
@@ -129,14 +146,8 @@ function Login({ onSignup }) {
             <button type="button" onClick={() => setSeen(!seen)} aria-label="Toggle password visibility"><Icon n="eye" s={18}/></button>
           </div>
         </label>
-        {error && <p className="form-error" role="alert">{error}</p>}
-        <div className="form-tools">
-          <label className="remember"><input defaultChecked type="checkbox"/><span/>Keep me signed in</label>
-          <button type="button" className="link">Forgot password?</button>
-        </div>
-        <button disabled={busy} className="sign-in">{busy ? 'Opening your workspace…' : <>Continue to workspace <Icon n="arrow" s={18}/></>}</button>
+        <button disabled={busy} className="sign-in">{busy && !selectedCard ? 'Opening your workspace…' : <>Continue to workspace <Icon n="arrow" s={18}/></>}</button>
       </form>
-      <p className="demo-hint">Demo password for seeded accounts: <b>sahayak123</b></p>
       <p className="login-help">New to the network? <button className="link" onClick={onSignup}>Create a profile</button></p>
     </AuthShell>
   );
@@ -462,7 +473,7 @@ function RegionStrip({ navigate }) {
     <section className="region">
       <div><i/>Regional status <b>{summary ? (summary.regionAccessCoveragePct >= 85 ? 'Stable' : summary.regionAccessCoveragePct >= 60 ? 'Watchful' : 'Disrupted') : 'Loading'}</b></div>
       <p>
-        <span><b>{summary?.totalVehicles ?? '—'}</b> active routes</span>
+        <span><b>{summary?.activeVehicles ?? '—'}</b> active routes</span>
         <span><b>{summary ? `${summary.regionAccessCoveragePct}%` : '—'}</b> access coverage</span>
         <span><b>{summary?.openFieldReports ?? '—'}</b> need attention</span>
       </p>

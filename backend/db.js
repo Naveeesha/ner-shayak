@@ -1,11 +1,11 @@
-const Database = require('better-sqlite3');
+const { DatabaseSync: Database } = require('node:sqlite');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
 const { NODES } = require('./data/nerNetwork');
 
 const db = new Database(path.join(__dirname, 'ner_sahayak.db'));
-db.pragma('journal_mode = WAL');
+db.exec('PRAGMA journal_mode = WAL;');
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -125,6 +125,7 @@ if (existing === 0) {
     VALUES (@id,@ownerId,@vehicleNumber,@cargoType,@originNode,@destinationNode,@status,@lat,@lng,@lastUpdated)`);
   const owner = db.prepare('SELECT id FROM users WHERE email = ?').get('arjun@ner-sahayak.in');
   const guwahati = NODES.find((n) => n.id === 'guwahati');
+  if (!guwahati) throw new Error('Seed data error: guwahati node not found in nerNetwork');
   insertVehicle.run({ id: uuid(), ownerId: owner.id, vehicleNumber: 'AS 01 K 4309', cargoType: 'Medical supplies', originNode: 'guwahati', destinationNode: 'jorhat', status: 'in_transit', lat: guwahati.lat, lng: guwahati.lng, lastUpdated: new Date().toISOString() });
 }
 
