@@ -14,6 +14,7 @@ const shipmentRoutes = require('./routes/shipments');
 const dashboardRoutes = require('./routes/dashboard');
 const i18nRoutes = require('./routes/i18n');
 const userRoutes = require('./routes/users');
+const askRoutes = require('./routes/ask');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -35,6 +36,9 @@ app.use('/api/shipments', shipmentRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/i18n', i18nRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/ask', askRoutes);
+app.use('/api/chat', askRoutes);
+app.use('/ask', askRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 
@@ -44,6 +48,11 @@ app.use((err, req, res, next) => {
   res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`NER-Sahayak backend listening on http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`NER-Sahayak backend listening on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;
+

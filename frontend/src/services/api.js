@@ -81,10 +81,15 @@ export const api = {
     return request(`/users${qs ? `?${qs}` : ''}`);
   },
   userDetail: (id) => request(`/users/${id}`),
+  updateUser: (id, payload) => request(`/users/${id}`, { method: 'PATCH', body: payload }),
+  deleteUser: (id) => request(`/users/${id}`, { method: 'DELETE' }),
 
   // i18n
   languages: () => request('/i18n/languages'),
   strings: (lang) => request(`/i18n/strings/${lang}`),
+
+  // Ask Sahayak AI
+  askSahayak: (query, context) => request('/ask', { method: 'POST', body: { query, context } }),
 
   health: () => request('/health', { auth: false }),
 };

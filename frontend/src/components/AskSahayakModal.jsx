@@ -1,0 +1,196 @@
+import { useEffect, useRef, useState } from 'react';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+
+function renderMarkdown(text) {
+  if (!text) return null;
+  const lines = text.split('\n');
+  return lines.map((line, idx) => {
+    let content = line;
+    const parts = content.split(/(\*\*.*?\*\*)/g);
+    const parsedLine = parts.map((part, pIdx) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={pIdx}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('*') && part.endsWith('*')) {
+        return <em key={pIdx}>{part.slice(1, -1)}</em>;
+      }
+      return part;
+    });
+
+    if (line.trim().startsWith('• ') || line.trim().startsWith('- ')) {
+      return <li key={idx} style={{ marginLeft: 16, marginBottom: 4 }}>{parsedLine.slice(1)}</li>;
+    }
+    if (line.trim() === '') {
+      return <div key={idx} style={{ height: 8 }} />;
+    }
+    return <p key={idx} style={{ margin: '3px 0' }}>{parsedLine}</p>;
+  });
+}
+
+function speakText(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const clean = text.replace(/\*\*/g, '').replace(/#/g, '').replace(/•/g, '');
+  const utterance = new SpeechSynthesisUtterance(clean);
+  utterance.rate = 1.0;
+  window.speechSynthesis.speak(utterance);
+}
+
+export default function AskSahayakModal({ isOpen, onClose }) {
+  const { user } = useAuth();
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [modeBadge, setModeBadge] = useState('NER Intelligence');
+  const chatEndRef = useRef(null);
+
+  useEffect(() => {
+    if (isOpen && messages.length === 0 && user) {
+      setMessages([
+        {
+          sender: 'ai',
+          text: `Hello **${user.name}**! I am **Ask Sahayak**, your AI assistant for logistics, route safety, and regional intelligence across North East India.\n\n` +
+            `How can I help you in your **${user.role.toUpperCase()}** workspace today?`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      ]);
+    }
+  }, [isOpen, messages.length, user]);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, loading]);
+
+  if (!isOpen) return null;
+
+  const handleSend = async (queryToSend) => {
+    const q = queryToSend || input;
+    if (!q.trim() || loading) return;
+
+    const userMsg = {
+      sender: 'user',
+      text: q.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    if (!queryToSend) setInput('');
+    setLoading(true);
+
+    try {
+      const res = await api.askSahayak(q.trim(), { role: user?.role, district: user?.district });
+      if (res.mode === 'openapi') {
+        setModeBadge(`OpenAPI (${res.model || 'GPT'})`);
+      } else {
+        setModeBadge('NER Intelligence Engine');
+      }
+
+      const aiMsg = {
+        sender: 'ai',
+        text: res.answer,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        context: res.contextUsed,
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          sender: 'ai',
+          text: `Sorry, I encountered an issue connecting to Sahayak AI: ${err.message}`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isError: true,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const suggestions = [
+    'Safest route Guwahati to Shillong',
+    'Check weather near Nagaon',
+    'Active landslide & flood reports',
+    'My workspace status',
+    'Emergency helpline numbers',
+  ];
+
+  return (
+    <div className="ask-modal-overlay" onClick={onClose}>
+      <div className="ask-modal-container" onClick={(e) => e.stopPropagation()}>
+        <header className="ask-modal-header">
+          <div className="ask-modal-title">
+            <div className="ask-avatar-icon">✦</div>
+            <div>
+              <h3>Ask Sahayak AI</h3>
+              <div className="ask-status">
+                <span className="dot-live" />
+                <span>{modeBadge}</span>
+              </div>
+            </div>
+          </div>
+          <button className="ask-close-btn" onClick={onClose} aria-label="Close Ask Sahayak">✕</button>
+        </header>
+
+        <div className="ask-modal-suggestions">
+          {suggestions.map((s, idx) => (
+            <button key={idx} className="ask-chip" onClick={() => handleSend(s)} disabled={loading}>
+              {s}
+            </button>
+          ))}
+        </div>
+
+        <div className="ask-messages-body">
+          {messages.map((m, idx) => (
+            <div key={idx} className={`ask-bubble-wrapper ${m.sender}`}>
+              <div className="ask-bubble">
+                <div className="ask-bubble-meta">
+                  <span>{m.sender === 'user' ? user?.name || 'You' : 'Ask Sahayak'}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {m.sender === 'ai' && (
+                      <button onClick={() => speakText(m.text)} className="speech-btn" title="Listen to answer">
+                        🔊 Listen
+                      </button>
+                    )}
+                    <time>{m.time}</time>
+                  </div>
+                </div>
+                <div className="ask-bubble-content">
+                  {renderMarkdown(m.text)}
+                </div>
+              </div>
+            </div>
+          ))}
+          {loading && (
+            <div className="ask-bubble-wrapper ai">
+              <div className="ask-bubble loading">
+                <div className="typing-indicator">
+                  <span /><span /><span />
+                </div>
+                <span className="loading-text">Analyzing network & live weather data…</span>
+              </div>
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
+
+        <footer className="ask-modal-footer">
+          <form onSubmit={(e) => { e.preventDefault(); handleSend(); }}>
+            <input
+              type="text"
+              placeholder="Ask about routes, weather, active landslides, cargo..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              disabled={loading}
+              autoFocus
+            />
+            <button type="submit" disabled={!input.trim() || loading}>
+              Send ➔
+            </button>
+          </form>
+        </footer>
+      </div>
+    </div>
+  );
+}

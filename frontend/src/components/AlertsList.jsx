@@ -36,6 +36,17 @@ export default function AlertsList({ notify }) {
     }
   };
 
+  const deleteAlert = async (id) => {
+    if (!window.confirm('Delete this alert from the regional network?')) return;
+    try {
+      await api.deleteAlert(id);
+      load();
+      notify && notify('Alert deleted.');
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <div style={{ display: 'grid', gap: 16 }}>
       {CAN_CREATE.includes(user.role) && (
@@ -70,9 +81,14 @@ export default function AlertsList({ notify }) {
         {alerts.map((a) => (
           <div key={a.id} style={alertCard(a.tone)}>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <b style={{ fontSize: 10, color: '#637c71' }}>{a.type}</b>
-                <time style={{ fontSize: 9, color: '#a0aea7' }}>{new Date(a.createdAt).toLocaleString()}</time>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <time style={{ fontSize: 9, color: '#a0aea7' }}>{new Date(a.createdAt).toLocaleString()}</time>
+                  {(user.role === 'official' || a.createdBy === user.id) && (
+                    <button onClick={() => deleteAlert(a.id)} style={deleteAlertBtn} title="Delete alert">✕</button>
+                  )}
+                </div>
               </div>
               <h4 style={{ fontSize: 12, margin: '4px 0 2px', color: '#3c5c50' }}>{a.title}</h4>
               <p style={{ fontSize: 11, color: '#86978f', margin: 0 }}>{a.text}</p>
@@ -88,6 +104,7 @@ export default function AlertsList({ notify }) {
 const toggleBtn = { border: 0, background: '#1e745b', color: '#fff', borderRadius: 7, padding: '9px 16px', fontSize: 11, fontWeight: 800, cursor: 'pointer' };
 const inputStyle = { height: 38, padding: '0 10px', border: '1px solid #dce5df', borderRadius: 7, fontSize: 12, flex: 1 };
 const btnStyle = { height: 40, border: 0, borderRadius: 7, color: '#fff', background: '#1e745b', fontSize: 11, fontWeight: 800, cursor: 'pointer' };
+const deleteAlertBtn = { border: 0, background: 'transparent', color: '#b5493a', fontSize: 12, cursor: 'pointer', padding: '0 4px', fontWeight: 800 };
 const alertCard = (tone) => ({
   padding: '12px 14px', borderRadius: 8, border: '1px solid #e1e9e3',
   borderLeft: `4px solid ${tone === 'amber' ? '#e2ab3d' : tone === 'blue' ? '#3c779a' : '#337b60'}`,

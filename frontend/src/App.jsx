@@ -10,6 +10,11 @@ import DistrictDashboard from './components/DistrictDashboard';
 import AlertsList from './components/AlertsList';
 import SettingsPanel from './components/SettingsPanel';
 import UsersDirectory from './components/UsersDirectory';
+import AskSahayakModal from './components/AskSahayakModal';
+import CommandPaletteModal from './components/CommandPaletteModal';
+import DriverOverview from './components/DriverOverview';
+import FieldOfficerOverview from './components/FieldOfficerOverview';
+import LogisticsOverview from './components/LogisticsOverview';
 
 const Icon = ({ n, s = 20 }) => {
   const icons = {
@@ -39,10 +44,48 @@ const roleCopy = {
   official: { title: 'A clearer view of the region.', sub: 'Turn live intelligence into timely, confident decisions.', action: 'View regional briefing' },
 };
 
-const baseNav = [['Overview', 'grid'], ['Live map', 'map'], ['Route planner', 'route'], ['Alerts', 'bell'], ['Field reports', 'report'], ['Profile', 'user']];
-const navForRole = (role) => role === 'official'
-  ? [...baseNav.slice(0, 5), ['Team directory', 'grid'], baseNav[5]]
-  : baseNav;
+const navForRole = (role) => {
+  if (role === 'driver') {
+    return [
+      ['Overview', 'grid'],
+      ['Route planner', 'route'],
+      ['Live map', 'map'],
+      ['Vehicle telemetry', 'phone'],
+      ['Alerts', 'bell'],
+      ['Profile', 'user'],
+    ];
+  }
+  if (role === 'field') {
+    return [
+      ['Overview', 'grid'],
+      ['Field reports', 'report'],
+      ['Live map', 'map'],
+      ['Alerts', 'bell'],
+      ['Route planner', 'route'],
+      ['Profile', 'user'],
+    ];
+  }
+  if (role === 'logistics') {
+    return [
+      ['Overview', 'grid'],
+      ['Cargo shipments', 'route'],
+      ['Fleet tracking', 'phone'],
+      ['Route planner', 'route'],
+      ['Live map', 'map'],
+      ['Alerts', 'bell'],
+      ['Profile', 'user'],
+    ];
+  }
+  return [
+    ['Overview', 'grid'],
+    ['Team directory', 'grid'],
+    ['Live map', 'map'],
+    ['Route planner', 'route'],
+    ['Alerts', 'bell'],
+    ['Field reports', 'report'],
+    ['Profile', 'user'],
+  ];
+};
 
 const emptySignup = {
   name: '', email: '', phone: '', password: '', confirm: '', role: 'driver',
@@ -56,7 +99,6 @@ const DEMO_PROFILES = [
   { role: 'official',  name: 'Ananya Gogoi', email: 'ananya@ner-sahayak.in', organisation: 'DoNER Regional Office',  detail: 'Disaster Management, Assam' },
 ];
 const ROLE_LABEL = { driver: 'Driver', field: 'Field officer', logistics: 'Logistics', official: 'Official' };
-const nameInitials = (name) => name.split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
 
 function Brand({ light = false }) {
   return <div className={`brand ${light ? 'light' : ''}`}><div className="brand-mark"><Icon n="logo" s={20}/></div><div><strong>ner-sahayak</strong><span>intelligence network</span></div></div>;
@@ -98,16 +140,12 @@ function Login({ onSignup }) {
   const [password, setPassword] = useState('');
   const [seen, setSeen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [selectedCard, setSelectedCard] = useState(null);
   const [error, setError] = useState('');
 
-  const loginAsProfile = async (profile) => {
-    setError(''); setSelectedCard(profile.email); setBusy(true);
-    try {
-      await login(profile.email, 'sahayak123');
-    } catch (err) {
-      setError(err.message); setBusy(false); setSelectedCard(null);
-    }
+  const fillDemo = (demoEmail) => {
+    setEmail(demoEmail);
+    setPassword('sahayak123');
+    setError('');
   };
 
   const submit = async (event) => {
@@ -121,33 +159,34 @@ function Login({ onSignup }) {
   };
 
   return (
-    <AuthShell intro={<div className="login-intro"><div className="eyebrow">WELCOME BACK</div><h2>Sign in to your workspace</h2><p>Select your profile to continue, or sign in manually below.</p></div>}>
-      <div className="login-profiles">
-        {DEMO_PROFILES.map((p) => (
-          <button key={p.email} type="button" className={`login-profile-card${selectedCard === p.email ? ' active' : ''}`} onClick={() => loginAsProfile(p)} disabled={busy}>
-            <div className="lp-avatar">{nameInitials(p.name)}</div>
-            <div className="lp-info">
-              <strong>{p.name}</strong>
-              <span className="lp-role">{ROLE_LABEL[p.role]}</span>
-              <span className="lp-detail">{p.organisation}</span>
-              <span className="lp-sub">{p.detail}</span>
-            </div>
-            {selectedCard === p.email && <span className="lp-loading"/>}
-          </button>
-        ))}
-      </div>
-      {error && <p className="form-error" role="alert" style={{marginBottom: '4px'}}>{error}</p>}
-      <div className="login-divider"><span>or sign in manually</span></div>
+    <AuthShell intro={<div className="login-intro"><div className="eyebrow">USER ACCESS</div><h2>Sign in to your workspace</h2><p>Enter your credentials to access your dedicated workspace and regional tools.</p></div>}>
       <form onSubmit={submit} className="login-form">
-        <label>Work email<input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="username" required/></label>
+        <label>Work email
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@ner-sahayak.in" autoComplete="username" required/>
+        </label>
         <label>Password
           <div className="password">
-            <input value={password} onChange={(e) => setPassword(e.target.value)} type={seen ? 'text' : 'password'} autoComplete="current-password" required/>
+            <input value={password} onChange={(e) => setPassword(e.target.value)} type={seen ? 'text' : 'password'} placeholder="••••••••" autoComplete="current-password" required/>
             <button type="button" onClick={() => setSeen(!seen)} aria-label="Toggle password visibility"><Icon n="eye" s={18}/></button>
           </div>
         </label>
-        <button disabled={busy} className="sign-in">{busy && !selectedCard ? 'Opening your workspace…' : <>Continue to workspace <Icon n="arrow" s={18}/></>}</button>
+        {error && <p className="form-error" role="alert" style={{ marginTop: '8px', marginBottom: '0' }}>{error}</p>}
+        <button disabled={busy} className="sign-in" type="submit">
+          {busy ? 'Opening your workspace…' : <>Sign in to workspace <Icon n="arrow" s={18}/></>}
+        </button>
       </form>
+
+      <div className="demo-fill-box">
+        <div className="demo-fill-header"><Icon n="spark" s={14}/><span>Test demo accounts (Quick Fill)</span></div>
+        <div className="demo-fill-buttons">
+          {DEMO_PROFILES.map((p) => (
+            <button type="button" key={p.email} className="demo-chip" onClick={() => fillDemo(p.email)}>
+              {ROLE_LABEL[p.role]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <p className="login-help">New to the network? <button className="link" onClick={onSignup}>Create a profile</button></p>
     </AuthShell>
   );
@@ -224,7 +263,7 @@ function Signup({ onLogin }) {
   );
 }
 
-function ProfileView({ roleMeta, initials, notify }) {
+function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
   const { user, updateProfile } = useAuth();
   const [form, setForm] = useState({
     name: user.name, phone: user.phone || '', organisation: user.organisation || '',
@@ -246,9 +285,13 @@ function ProfileView({ roleMeta, initials, notify }) {
 
   return (
     <section className="profile-page">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← Back to Overview</button>
+        <button className="profile-signout-btn" onClick={exit}>Sign out of account</button>
+      </div>
       <div className="profile-hero card">
         <span className="profile-avatar">{initials}</span>
-        <div><small>SIGNED IN</small><h2>{user.name}</h2><p>{user.email}</p></div>
+        <div><small>SIGNED IN ACCOUNT</small><h2>{user.name}</h2><p>{user.email}</p></div>
         <div className="profile-role-badge"><Icon n={roleMeta.icon} s={16}/>{roleMeta.label}</div>
       </div>
       <div className="profile-grid">
@@ -287,158 +330,117 @@ function ProfileView({ roleMeta, initials, notify }) {
   );
 }
 
-function WorkspaceSwitcher({ role, onChange, close, exit, openProfile }) {
-  return <div className="workspace-switcher" role="dialog" aria-label="Switch workspace"><header><div><span>WORKSPACE</span><h3>Choose a profile</h3></div><button onClick={close} aria-label="Close workspace switcher"><Icon n="close" s={16}/></button></header><div className="switcher-list">{roles.map(item => <button key={item.id} className={item.id === role ? 'active' : ''} onClick={() => onChange(item.id)}><span className="switcher-avatar">{item.initials}</span><span><b>{item.name}</b><small>{item.label}</small></span>{item.id === role && <Icon n="check" s={15}/>}</button>)}</div><footer><button type="button" className="profile-link" onClick={openProfile}>View my profile</button><button onClick={exit}>Sign out</button></footer></div>;
-}
-
 // Full-page views for each nav item — all backed by the real API.
-function PageView({ page, role, notify }) {
+function PageView({ page, role, notify, navigate }) {
   const details = {
     'Live map': ['Live network map', 'Explore road conditions, weather warnings and moving resources in one map.', 'map'],
     'Route planner': ['Plan the safest route', 'AI-optimized routing using live weather and disruption data.', 'route'],
     Alerts: ['Your alerts', 'Stay up to date with the signals that matter to you.', 'bell'],
-    'Field reports': ['Field reports', 'Share a geo-tagged update that helps the wider network respond.', 'report'],
-    Settings: ['Workspace settings', 'Manage notification preferences, language, and offline synchronisation.', 'settings'],
+    'Field reports': ['Field reports & hazards', 'Share a geo-tagged update that helps the wider network respond.', 'report'],
+    Settings: ['Workspace settings', 'Manage notification preferences, language, and night driving mode.', 'settings'],
     'Team directory': ['Team directory', 'Every registered driver, field officer, logistics operator, and official across the network.', 'grid'],
+    'Cargo shipments': ['Cargo dispatch queue', 'Manage shipment routes, dispatch priorities, and delivery status.', 'route'],
+    'Fleet tracking': ['Fleet GPS tracking', 'Live vehicle positions, telematics, and driver tracking.', 'phone'],
+    'Vehicle telemetry': ['Vehicle GPS telemetry', 'Manage assigned vehicle, telemetry fixes, and journey position.', 'phone'],
   };
-  const [title, description, icon] = details[page];
+  const [title, description, icon] = details[page] || details['Live map'];
   return (
     <section className="card" style={{ padding: '22px 24px' }}>
-      <header style={{ padding: 0, minHeight: 'auto', marginBottom: 16 }}>
+      <header style={{ padding: 0, minHeight: 'auto', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <small><Icon n={icon} s={12}/> {page.toUpperCase()}</small>
           <h2 style={{ marginTop: 8 }}>{title}</h2>
           <p style={{ color: '#789087', fontSize: 12, marginTop: 4 }}>{description}</p>
         </div>
+        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← Back to Overview</button>
       </header>
       {page === 'Live map' && <LiveMap height={520} />}
       {page === 'Route planner' && <RoutePlanner notify={notify} />}
       {page === 'Alerts' && <AlertsList notify={notify} />}
-      {page === 'Field reports' && (role === 'logistics' ? <VehicleTracker notify={notify} /> : <FieldReportForm notify={notify} />)}
+      {page === 'Field reports' && <FieldReportForm notify={notify} />}
       {page === 'Settings' && <SettingsPanel notify={notify} />}
       {page === 'Team directory' && <UsersDirectory />}
-    </section>
-  );
-}
-
-function OverviewAlerts({ navigate, notify }) {
-  const [alerts, setAlerts] = useState([]);
-  useEffect(() => { api.alerts().then((res) => setAlerts(res.alerts.slice(0, 3))).catch(() => {}); }, []);
-  const toneClass = { amber: 'amber', blue: 'blue', green: 'green' };
-  return (
-    <section className="card attention">
-      <header><div><small>STAY INFORMED</small><h2>What needs your attention</h2></div><button onClick={() => navigate('Alerts')}>View all <Icon n="arrow" s={15}/></button></header>
-      {alerts.length === 0 && <p style={{ fontSize: 11, color: '#7c8f87', padding: '10px 0' }}>No active alerts right now.</p>}
-      {alerts.map((a) => (
-        <article className="alert" key={a.id}>
-          <div className={toneClass[a.tone] || 'blue'}><Icon n={a.icon} s={18}/></div>
-          <section>
-            <header><b>{a.type}</b><time>{new Date(a.createdAt).toLocaleTimeString()}</time></header>
-            <h3>{a.title}</h3><p>{a.text}</p>
-          </section>
-          <button onClick={() => { navigate('Alerts'); notify(`Opened ${a.title}`); }} aria-label={`Open ${a.title}`}><Icon n="chevron" s={16}/></button>
-        </article>
-      ))}
+      {(page === 'Cargo shipments' || page === 'Fleet tracking' || page === 'Vehicle telemetry') && <VehicleTracker notify={notify} />}
     </section>
   );
 }
 
 function Overview({ role, navigate, action, notify }) {
-  const [insight, setInsight] = useState(null);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    api.nodes().then((res) => {
-      const match = res.nodes.find((n) => n.name.toLowerCase() === (user.district || '').toLowerCase())
-        || res.nodes.find((n) => n.state === user.state) || res.nodes.find((n) => n.id === 'guwahati');
-      if (match) api.weatherFor(match.id).then((w) => setInsight({ node: match, weather: w })).catch(() => {});
-    }).catch(() => {});
-  }, [user.district, user.state]);
-
-  if (role === 'official') {
-    return <DistrictDashboard notify={notify} />;
+  if (role === 'driver') {
+    return <DriverOverview navigate={navigate} action={action} notify={notify} />;
   }
-
-  return (
-    <>
-      <div className="dashboard-grid">
-        <section className="card routes">
-          <header><div><small>LIVE NETWORK</small><h2>Routes around you</h2></div><button onClick={() => navigate('Live map')}>Open map <Icon n="arrow" s={15}/></button></header>
-          <div className="map-view" style={{ padding: 0 }}><LiveMap height={265} /></div>
-        </section>
-        {role === 'logistics' ? (
-          <section className="card journey" style={{ padding: '22px 20px' }}>
-            <div className="journey-top"><div><small>FLEET</small><h2>Your vehicles</h2></div></div>
-            <VehicleTracker notify={notify} />
-          </section>
-        ) : (
-          <section className="card journey">
-            <div className="journey-top">
-              <div><small>NEXT JOURNEY</small><h2>Guwahati <span>→</span> Jorhat</h2><p>NH 27 · plan below for a live ETA</p></div>
-            </div>
-            <div className="journey-time">
-              <span><Icon n="clock" s={16}/>{insight ? insight.weather.label : 'Checking conditions'}</span>
-              <b>06<sup>h</sup> 40<sup>m</sup></b>
-              <p>Baseline estimate — plan a route for a live figure</p>
-            </div>
-            <div className="conditions">
-              <div><span>Route conditions near {insight?.node?.name || 'you'}</span><b><i/>{insight ? insight.weather.label : '—'}</b></div>
-              <p><i style={{ left: `${Math.min(90, (insight?.weather?.severity || 0) * 100)}%` }}/></p>
-              <footer><span>Clear</span><span>Caution</span><span>Disrupted</span></footer>
-            </div>
-            <button className="route-details" onClick={action}>View route details <Icon n="arrow" s={16}/></button>
-          </section>
-        )}
-      </div>
-      <div className="bottom-grid">
-        <OverviewAlerts navigate={navigate} notify={notify} />
-        <section className="card quick">
-          <small>QUICK ACTIONS</small><h2>Get moving</h2>
-          {[['route', 'Plan a route', 'Smart guidance'], ['report', 'Share an update', 'Help your network'], ['phone', 'Emergency help', 'Get support fast']].map(([icon, title, detail]) => (
-            <button key={title} onClick={() => title === 'Plan a route' ? navigate('Route planner') : title === 'Share an update' ? navigate('Field reports') : notify('Emergency support: dial 112 (India national emergency number).')}>
-              <span><Icon n={icon} s={19}/></span><b>{title}</b><small>{detail}</small><Icon n="chevron" s={16}/>
-            </button>
-          ))}
-        </section>
-      </div>
-      <section className="insight">
-        <div><Icon n="spark" s={19}/></div>
-        <article>
-          <small>SAHAYAK INSIGHT</small>
-          <h3>{insight ? `"Conditions near ${insight.node.name}: ${insight.weather.label.toLowerCase()}."` : 'Gathering live conditions…'}</h3>
-          <p>{insight ? (insight.weather.severity > 0.5 ? 'Consider delaying non-essential travel or choosing an alternate route.' : 'Conditions look favourable for travel today.') : 'Checking live weather across the network.'}</p>
-        </article>
-        <button onClick={() => navigate('Route planner')}>Plan with this insight <Icon n="arrow" s={16}/></button>
-      </section>
-    </>
-  );
+  if (role === 'field') {
+    return <FieldOfficerOverview navigate={navigate} notify={notify} />;
+  }
+  if (role === 'logistics') {
+    return <LogisticsOverview navigate={navigate} notify={notify} />;
+  }
+  return <DistrictDashboard notify={notify} />;
 }
 
-function Dashboard({ role, exit, switchRole }) {
+function Dashboard({ role, exit }) {
   const { user, initialsFrom } = useAuth();
   const [page, setPage] = useState('Overview');
   const [menu, setMenu] = useState(false);
   const [read, setRead] = useState(false);
   const [toast, setToast] = useState('');
-  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [askModalOpen, setAskModalOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   const userCopy = roleCopy[role];
-  const profile = roles.find(item => item.id === role);
+  const profile = roles.find(item => item.id === role) || roles[0];
   const initials = initialsFrom(user.name);
   const detail = [profile.label, user.district || user.organisation || user.vehicleNumber].filter(Boolean).join(' • ');
   const notify = message => { setToast(message); setTimeout(() => setToast(''), 2600); };
-  const navigate = next => { setPage(next); setMenu(false); setSwitcherOpen(false); };
-  const changeWorkspace = nextRole => { switchRole(nextRole); setPage('Overview'); setMenu(false); setSwitcherOpen(false); notify(`Switched to ${roles.find(item => item.id === nextRole).label} workspace.`); };
+  const navigate = next => { setPage(next); setMenu(false); };
   const action = () => { if (role === 'field') navigate('Field reports'); else navigate('Route planner'); };
 
-  return <div className="workspace">
-    <aside className={`side ${menu ? 'open' : ''}`}><div className="side-brand"><Brand/><button onClick={() => setMenu(false)} aria-label="Close navigation"><Icon n="close"/></button></div><button className="role-chip" onClick={() => setSwitcherOpen(!switcherOpen)} aria-expanded={switcherOpen}><span><Icon n={profile.icon} s={16}/></span><div><b>{profile.label}</b><small>Switch workspace</small></div><Icon n="chevron" s={15}/></button><nav>{navForRole(role).map(([name, icon]) => <button className={page === name ? 'active' : ''} onClick={() => navigate(name)} key={name}><Icon n={icon} s={19}/>{name}{name === 'Alerts' && !read && <i>•</i>}</button>)}</nav><div className="side-bottom"><button onClick={() => navigate('Settings')}><Icon n="settings" s={18}/>Settings</button><button className="profile" onClick={() => navigate('Profile')} aria-label="Open profile"><span>{initials}</span><div><b>{user.name}</b><small>{detail}</small></div><i>•••</i></button></div></aside>
-    {switcherOpen && <WorkspaceSwitcher role={role} onChange={changeWorkspace} close={() => setSwitcherOpen(false)} exit={exit} openProfile={() => navigate('Profile')}/>}
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setCmdOpen((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  return <div className={`workspace ${darkMode ? 'dark-mode' : ''}`}>
+    <aside className={`side ${menu ? 'open' : ''}`}>
+      <div className="side-brand"><Brand/><button onClick={() => setMenu(false)} aria-label="Close navigation"><Icon n="close"/></button></div>
+      <div className="role-chip static">
+        <span><Icon n={profile.icon} s={16}/></span>
+        <div><b>{profile.label}</b><small>Your Workspace</small></div>
+      </div>
+      <nav>{navForRole(role).map(([name, icon]) => <button className={page === name ? 'active' : ''} onClick={() => navigate(name)} key={name}><Icon n={icon} s={19}/>{name}{name === 'Alerts' && !read && <i>•</i>}</button>)}</nav>
+      <div className="side-bottom">
+        <button onClick={() => navigate('Settings')}><Icon n="settings" s={18}/>Settings</button>
+        <button className="profile" onClick={() => navigate('Profile')} aria-label="Open profile"><span>{initials}</span><div><b>{user.name}</b><small>{detail}</small></div></button>
+        <button className="side-signout-btn" onClick={exit}><Icon n="close" s={15}/> Sign Out</button>
+      </div>
+    </aside>
+
     <main className="dashboard">
       <header className="top">
         <button className="hamburger" onClick={() => setMenu(true)} aria-label="Open navigation"><Icon n="menu"/></button>
-        <div className="crumb"><span>Workspace</span><Icon n="chevron" s={13}/><b>{page}</b></div>
+        <div className="crumb">
+          <button className="crumb-link" onClick={() => navigate('Overview')}>Workspace</button>
+          {page !== 'Overview' && <><Icon n="chevron" s={13}/><b className="crumb-current">{page}</b></>}
+        </div>
+        {page !== 'Overview' && (
+          <button className="top-back-btn" onClick={() => navigate('Overview')}>
+            ← Back to Overview
+          </button>
+        )}
         <div className="top-actions">
-          <button className="ask" onClick={() => notify('Sahayak is ready to help with route, risk, and delivery questions.')}><Icon n="spark" s={16}/>Ask Sahayak</button>
+          <button className="top-search-btn" onClick={() => setCmdOpen(true)} title="Quick Search (Ctrl+K)">
+            🔍 Search <kbd style={{ fontSize: 9, opacity: 0.8, marginLeft: 4 }}>Ctrl+K</kbd>
+          </button>
+          <button className="top-theme-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle Night Mode">
+            {darkMode ? '☀️ Day Mode' : '🌙 Night Mode'}
+          </button>
+          <button className="ask" onClick={() => setAskModalOpen(true)}><Icon n="spark" s={16}/>Ask Sahayak</button>
           <button className="notifications" onClick={() => { setRead(true); notify('All alerts marked as seen.'); }} aria-label="Mark alerts as seen"><Icon n="bell" s={18}/>{!read && <i/>}</button>
           <button className="top-avatar" onClick={() => navigate('Profile')} aria-label="Open profile">{initials}</button>
         </div>
@@ -455,14 +457,15 @@ function Dashboard({ role, exit, switchRole }) {
           <RegionStrip navigate={navigate} />
         </>}
         {page === 'Overview' ? <Overview role={role} navigate={navigate} action={action} notify={notify}/>
-          : page === 'Profile' ? <ProfileView roleMeta={profile} initials={initials} notify={notify}/>
-          : <PageView page={page} role={role} notify={notify}/>}
+          : page === 'Profile' ? <ProfileView roleMeta={profile} initials={initials} notify={notify} navigate={navigate} exit={exit}/>
+          : <PageView page={page} role={role} notify={notify} navigate={navigate}/>}
       </div>
     </main>
+
+    <AskSahayakModal isOpen={askModalOpen} onClose={() => setAskModalOpen(false)} />
+    <CommandPaletteModal isOpen={cmdOpen} onClose={() => setCmdOpen(false)} navigate={navigate} />
     {menu && <button className="overlay" onClick={() => setMenu(false)} aria-label="Close navigation"/>}
-    {switcherOpen && <button className="switcher-overlay" onClick={() => setSwitcherOpen(false)} aria-label="Close workspace switcher"/>}
     {toast && <div className="toast"><Icon n="check" s={17}/>{toast}</div>}
-    <button className="sign-out" onClick={exit}>Sign out</button>
   </div>;
 }
 
@@ -485,15 +488,13 @@ function RegionStrip({ navigate }) {
 function AppShell() {
   const { user, logout, ready } = useAuth();
   const [authView, setAuthView] = useState('login');
-  const [workspaceRole, setWorkspaceRole] = useState(null);
   if (!ready) return null;
   if (!user) {
     return authView === 'signup'
       ? <Signup onLogin={() => setAuthView('login')}/>
       : <Login onSignup={() => setAuthView('signup')}/>;
   }
-  const role = workspaceRole || user.role;
-  return <Dashboard role={role} exit={() => { setWorkspaceRole(null); logout(); }} switchRole={setWorkspaceRole}/>;
+  return <Dashboard role={user.role} exit={logout} />;
 }
 
 export default function App() {

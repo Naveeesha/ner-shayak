@@ -5,13 +5,12 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 const router = express.Router();
 
 function toPublicUser(u) {
+  if (!u) return null;
   const { passwordHash, ...rest } = u;
   return rest;
 }
 
-// GET /api/users — directory of every registered account.
-// Restricted to 'official' role, since this is regional oversight data
-// (names, contact info, postings) that shouldn't be visible to every driver.
+// GET /api/users — directory of every registered account (Official/Admin only)
 router.get('/', requireAuth, requireRole('official'), (req, res) => {
   const { role, state, search } = req.query;
   let sql = 'SELECT * FROM users WHERE 1=1';
@@ -37,6 +36,40 @@ router.get('/:id', requireAuth, requireRole('official'), (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
   res.json({ user: toPublicUser(user) });
+});
+
+// PATCH /api/users/:id — update user details (Official/Admin only)
+router.patch('/:id', requireAuth, requireRole('official'), (req, res) => {
+  const allowed = ['name', 'phone', 'role', 'organisation', 'vehicleNumber', 'state', 'district', 'language', 'hub', 'department'];
+  const updates = {};
+  allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
+
+  if (Object.keys(updates).length === 0) return res.status(400).json({ error: 'No valid fields to update' });
+  if (updates.role && !['driver', 'field', 'logistics', 'official'].includes(updates.role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'User not found' });
+
+  const setClause = Object.keys(updates).map((k) => `${k} = @${k}`).join(', ');
+  db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.params.id });
+
+  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  res.json({ user: toPublicUser(updated) });
+});
+
+// DELETE /api/users/:id — delete a user account (Official/Admin only)
+router.delete('/:id', requireAuth, requireRole('official'), (req, res) => {
+  if (req.user.id === req.params.id) {
+    return res.status(400).json({ error: 'You cannot delete your own account from the directory.' });
+  }
+
+  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'User not found' });
+
+  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+  res.json({ ok: true, deletedId: req.params.id });
 });
 
 module.exports = router;
