@@ -16,6 +16,51 @@ export const USER_ROLES = [
   }[r.id],
 }));
 
+export const DEMO_USERS = [
+  {
+    id: 'u-arjun',
+    name: 'Arjun Bora',
+    email: 'arjun@ner-sahayak.in',
+    role: 'driver',
+    organisation: 'Independent Operator',
+    district: 'Kamrup Metropolitan',
+    state: 'Assam',
+    vehicleNumber: 'AS 01 K 4309',
+    phone: '+91 98765 43210',
+  },
+  {
+    id: 'u-priya',
+    name: 'Priya Deka',
+    email: 'priya@ner-sahayak.in',
+    role: 'field',
+    organisation: 'PWD Field Unit',
+    district: 'Nagaon',
+    state: 'Assam',
+    phone: '+91 98765 43211',
+  },
+  {
+    id: 'u-rohan',
+    name: 'Rohan Sharma',
+    email: 'rohan@ner-sahayak.in',
+    role: 'logistics',
+    organisation: 'NER Freight Movers',
+    district: 'Kamrup Metropolitan',
+    state: 'Assam',
+    phone: '+91 98765 43212',
+  },
+  {
+    id: 'u-ananya',
+    name: 'Ananya Gogoi',
+    email: 'ananya@ner-sahayak.in',
+    role: 'official',
+    organisation: 'DoNER Regional Office',
+    district: 'Kamrup Metropolitan',
+    state: 'Assam',
+    department: 'Disaster Management',
+    phone: '+91 98765 43213',
+  },
+];
+
 export const NER_REGION_STATES = [
   'Assam', 'Meghalaya', 'Nagaland', 'Manipur', 'Mizoram', 'Tripura', 'Arunachal Pradesh', 'Sikkim',
 ];
@@ -41,33 +86,98 @@ export function AuthProvider({ children }) {
     const token = tokenStore.get();
     if (!token) { setReady(true); return; }
     api.me()
-      .then((res) => setUser(res.user))
-      .catch(() => tokenStore.clear())
+      .then((res) => {
+        setUser(res.user);
+        localStorage.setItem('ner_sahayak_user', JSON.stringify(res.user));
+      })
+      .catch(() => {
+        const cached = localStorage.getItem('ner_sahayak_user');
+        if (cached) {
+          try { setUser(JSON.parse(cached)); } catch (_) { tokenStore.clear(); }
+        } else {
+          tokenStore.clear();
+        }
+      })
       .finally(() => setReady(true));
   }, []);
 
   const login = useCallback(async (email, password) => {
-    const res = await api.login(email, password); // throws on 401 with backend's message
-    tokenStore.set(res.token);
-    setUser(res.user);
-    return res.user;
+    try {
+      const res = await api.login(email, password);
+      tokenStore.set(res.token);
+      localStorage.setItem('ner_sahayak_user', JSON.stringify(res.user));
+      setUser(res.user);
+      return res.user;
+    } catch (err) {
+      // If backend is unreachable or running on static hosting (GitHub Pages), fall back to client authentication
+      if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.status === undefined)) {
+        const cleanEmail = (email || '').toLowerCase().trim();
+        const demoMatch = DEMO_USERS.find((u) => u.email.toLowerCase() === cleanEmail);
+        const fallbackUser = demoMatch || {
+          id: `demo-${Date.now()}`,
+          name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Demo User',
+          email: cleanEmail,
+          role: 'driver',
+          organisation: 'NER Sahayak Member',
+          district: 'Kamrup Metropolitan',
+          state: 'Assam',
+        };
+        const mockToken = `demo_token_${Date.now()}`;
+        tokenStore.set(mockToken);
+        localStorage.setItem('ner_sahayak_user', JSON.stringify(fallbackUser));
+        setUser(fallbackUser);
+        return fallbackUser;
+      }
+      throw err;
+    }
   }, []);
 
   const signup = useCallback(async (form) => {
-    const res = await api.signup(form); // throws on validation error with backend's message
-    tokenStore.set(res.token);
-    setUser(res.user);
-    return res.user;
+    try {
+      const res = await api.signup(form);
+      tokenStore.set(res.token);
+      localStorage.setItem('ner_sahayak_user', JSON.stringify(res.user));
+      setUser(res.user);
+      return res.user;
+    } catch (err) {
+      if (err.message && (err.message.includes('fetch') || err.message.includes('NetworkError') || err.status === undefined)) {
+        const fallbackUser = {
+          id: `user-${Date.now()}`,
+          name: form.name || 'New Member',
+          email: form.email,
+          role: form.role || 'driver',
+          organisation: form.organisation || 'NER Logistics',
+          district: form.district || 'Kamrup Metropolitan',
+          state: form.state || 'Assam',
+        };
+        const mockToken = `demo_token_${Date.now()}`;
+        tokenStore.set(mockToken);
+        localStorage.setItem('ner_sahayak_user', JSON.stringify(fallbackUser));
+        setUser(fallbackUser);
+        return fallbackUser;
+      }
+      throw err;
+    }
   }, []);
 
   const updateProfile = useCallback(async (partial) => {
-    const res = await api.updateProfile(partial);
-    setUser(res.user);
-    return res.user;
+    try {
+      const res = await api.updateProfile(partial);
+      setUser(res.user);
+      localStorage.setItem('ner_sahayak_user', JSON.stringify(res.user));
+      return res.user;
+    } catch (_) {
+      setUser((prev) => {
+        const updated = { ...prev, ...partial };
+        localStorage.setItem('ner_sahayak_user', JSON.stringify(updated));
+        return updated;
+      });
+    }
   }, []);
 
   const logout = useCallback(() => {
     tokenStore.clear();
+    localStorage.removeItem('ner_sahayak_user');
     setUser(null);
   }, []);
 
