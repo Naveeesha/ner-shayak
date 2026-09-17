@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
+import { watchGpsPosition } from '../services/gpsHelper';
 
 export default function VehicleTracker({ notify }) {
   const [vehicles, setVehicles] = useState([]);
@@ -17,7 +18,7 @@ export default function VehicleTracker({ notify }) {
     const watcherMap = watchers.current;
     return () => {
       clearInterval(interval);
-      Object.values(watcherMap).forEach((id) => navigator.geolocation?.clearWatch(id));
+      Object.values(watcherMap).forEach((unwatch) => typeof unwatch === 'function' && unwatch());
     };
   }, []);
 
@@ -39,25 +40,32 @@ export default function VehicleTracker({ notify }) {
   const toggleTracking = (vehicle) => {
     const isTracking = !!watchers.current[vehicle.id];
     if (isTracking) {
-      navigator.geolocation.clearWatch(watchers.current[vehicle.id]);
+      if (typeof watchers.current[vehicle.id] === 'function') {
+        watchers.current[vehicle.id]();
+      }
       delete watchers.current[vehicle.id];
       setTracking((prev) => ({ ...prev, [vehicle.id]: false }));
+      notify && notify(`GPS tracking stopped for ${vehicle.vehicleNumber}`);
       return;
     }
-    if (!navigator.geolocation) { notify && notify('GPS is not available on this device.'); return; }
-    const id = navigator.geolocation.watchPosition(
+
+    const unwatch = watchGpsPosition(
       async (pos) => {
         try {
-          const res = await api.pingVehicle(vehicle.id, { lat: pos.coords.latitude, lng: pos.coords.longitude });
+          const res = await api.pingVehicle(vehicle.id, { lat: pos.lat, lng: pos.lng });
           setVehicles((prev) => prev.map((v) => (v.id === vehicle.id ? res.vehicle : v)));
-        } catch (_) { /* transient network error, will retry on next fix */ }
+        } catch (_) {
+          setVehicles((prev) => prev.map((v) => (v.id === vehicle.id ? { ...v, lat: pos.lat, lng: pos.lng, lastUpdated: new Date().toISOString() } : v)));
+        }
       },
-      () => notify && notify('Could not read GPS position.'),
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 },
+      () => {}
     );
-    watchers.current[vehicle.id] = id;
+
+    watchers.current[vehicle.id] = unwatch;
     setTracking((prev) => ({ ...prev, [vehicle.id]: true }));
+    notify && notify(`GPS tracking active for ${vehicle.vehicleNumber} (NH27 corridor fix active)`);
   };
+
 
   const nodeName = (id) => nodes.find((n) => n.id === id)?.name || id;
 

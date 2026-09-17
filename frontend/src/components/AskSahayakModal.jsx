@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { generateBrowserAIResponse } from '../services/askLocalFallback';
+
 
 function renderMarkdown(text) {
   if (!text) return null;
@@ -93,19 +95,21 @@ export default function AskSahayakModal({ isOpen, onClose }) {
         context: res.contextUsed,
       };
       setMessages((prev) => [...prev, aiMsg]);
-    } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: 'ai',
-          text: `Sorry, I encountered an issue connecting to Sahayak AI: ${err.message}`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          isError: true,
-        },
-      ]);
+    } catch (_) {
+      // Offline / GitHub Pages fallback — execute client-side Sahayak AI engine
+      const res = generateBrowserAIResponse(q.trim(), user || {});
+      setModeBadge('Sahayak AI (Client Engine)');
+      const aiMsg = {
+        sender: 'ai',
+        text: res.answer,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        context: res.contextUsed,
+      };
+      setMessages((prev) => [...prev, aiMsg]);
     } finally {
       setLoading(false);
     }
+
   };
 
   const suggestions = [

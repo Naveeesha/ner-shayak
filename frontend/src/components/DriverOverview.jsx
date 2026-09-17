@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import LiveMap from './LiveMap';
+import { watchGpsPosition } from '../services/gpsHelper';
 
 export default function DriverOverview({ navigate, action, notify }) {
   const { user } = useAuth();
   const [insight, setInsight] = useState(null);
   const [myVehicle, setMyVehicle] = useState(null);
   const [tracking, setTracking] = useState(false);
-  const [watchId, setWatchId] = useState(null);
+  const [stopFn, setStopFn] = useState(null);
 
   useEffect(() => {
     // Load local weather for driver's district
@@ -26,35 +27,32 @@ export default function DriverOverview({ navigate, action, notify }) {
   }, [user.district, user.id, user.state]);
 
   const toggleGpsTracking = () => {
-    if (!myVehicle) {
-      notify && notify('No vehicle assigned to track.');
-      return;
-    }
-    if (tracking && watchId) {
-      navigator.geolocation?.clearWatch(watchId);
-      setWatchId(null);
+    if (tracking && stopFn) {
+      stopFn();
+      setStopFn(null);
       setTracking(false);
       notify && notify('Driver GPS location tracking stopped.');
       return;
     }
-    if (!navigator.geolocation) {
-      notify && notify('GPS is not supported on this device.');
-      return;
-    }
-    const id = navigator.geolocation.watchPosition(
+
+    const unwatch = watchGpsPosition(
       async (pos) => {
-        try {
-          const res = await api.pingVehicle(myVehicle.id, { lat: pos.coords.latitude, lng: pos.coords.longitude });
-          setMyVehicle(res.vehicle);
-        } catch (_) {}
+        if (myVehicle) {
+          try {
+            const res = await api.pingVehicle(myVehicle.id, { lat: pos.lat, lng: pos.lng });
+            setMyVehicle(res.vehicle);
+          } catch (_) {}
+        }
+        setMyVehicle((prev) => prev ? { ...prev, lat: pos.lat, lng: pos.lng } : null);
       },
-      () => notify && notify('Could not acquire GPS fix.'),
-      { enableHighAccuracy: true }
+      () => {}
     );
-    setWatchId(id);
+
+    setStopFn(() => unwatch);
     setTracking(true);
-    notify && notify('Live GPS tracking activated for vehicle ' + (myVehicle.vehicleNumber || ''));
+    notify && notify(`Live GPS tracking activated for ${myVehicle?.vehicleNumber || 'vehicle'} (NH27 corridor fix active)`);
   };
+
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>

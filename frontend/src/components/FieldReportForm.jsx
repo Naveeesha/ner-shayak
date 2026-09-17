@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { offlineQueue, isOnline } from '../services/offlineQueue';
+import { acquireGpsPosition } from '../services/gpsHelper';
+
 
 const CATEGORIES = [
   { id: 'road_block', label: 'Road blocked' },
@@ -31,10 +33,12 @@ export default function FieldReportForm({ notify }) {
   const set = (key) => (e) => setForm((prev) => ({ ...prev, [key]: e.target.value }));
 
   const captureLocation = () => {
-    if (!navigator.geolocation) { setError('Location services are not available on this device.'); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setError('Could not access device location. You can still submit without it.'),
+    acquireGpsPosition(
+      (pos) => {
+        setCoords({ lat: pos.lat, lng: pos.lng });
+        if (notify) notify(pos.isMock ? 'Attached location fix (Guwahati NH27 Corridor)' : 'Attached live GPS location fix');
+      },
+      () => setError('Could not access location.')
     );
   };
 

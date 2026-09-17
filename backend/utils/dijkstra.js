@@ -1,14 +1,6 @@
 const { NODES, EDGES } = require('../data/nerNetwork');
 
-// Build adjacency list once (edges are bidirectional roads).
 function buildGraph() {
-  const graph = {};
-  NODES.forEach((n) => { graph[n.id] = []; });
-  EDGES.forEach((e) => {
-    graph[e.from].push({ to: e.to, ...e });
-    graph[e.to].push({ to: e.from, from: e.to, ...e, from: e.from, to2: e.from }); // placeholder, fixed below
-  });
-  // Rebuild cleanly to avoid the confusing overwrite above
   const clean = {};
   NODES.forEach((n) => { clean[n.id] = []; });
   EDGES.forEach((e) => {
@@ -19,20 +11,21 @@ function buildGraph() {
 }
 
 /**
- * Compute a live "risk multiplier" for an edge given weather severity (0-1)
- * and any active disruption reports affecting that corridor.
- * riskMultiplier >= 1. Higher = slower / more dangerous / to be avoided.
+ * Compute edge risk weight.
+ * Safety is heavily prioritized over raw distance:
+ * Hazards (landslides, floods, storms) apply exponential penalties so the router
+ * willingly chooses longer, slower bypasses if they guarantee safe delivery.
  */
 function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {}) {
   const baseWeight = edge.km * edge.terrainFactor;
 
-  // Weather at both endpoints of the edge — take the worse of the two.
+  // Weather severity (0 to 1) -> exponential risk penalty up to 8x
   const wA = weatherSeverityByNode[edge.from] ?? 0;
   const wB = weatherSeverityByNode[edge.to] ?? 0;
-  const weatherSeverity = Math.max(wA, wB); // 0 (clear) -> 1 (severe)
-  const weatherMultiplier = 1 + weatherSeverity * 1.8; // up to 2.8x
+  const weatherSeverity = Math.max(wA, wB);
+  const weatherMultiplier = 1 + Math.pow(weatherSeverity, 2) * 8.0;
 
-  // Active disruption reports tagged to this road/corridor
+  // Active field disruption reports (landslide, flood, bridge damage)
   const relevant = disruptions.filter(
     (d) => (d.fromNode === edge.from && d.toNode === edge.to) ||
            (d.fromNode === edge.to && d.toNode === edge.from) ||
@@ -42,9 +35,9 @@ function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {})
   let blocked = false;
   relevant.forEach((d) => {
     if (d.severity === 'blocked') blocked = true;
-    else if (d.severity === 'severe') disruptionMultiplier = Math.max(disruptionMultiplier, 3);
-    else if (d.severity === 'moderate') disruptionMultiplier = Math.max(disruptionMultiplier, 1.8);
-    else if (d.severity === 'minor') disruptionMultiplier = Math.max(disruptionMultiplier, 1.2);
+    else if (d.severity === 'severe') disruptionMultiplier = Math.max(disruptionMultiplier, 15.0); // 15x safety penalty
+    else if (d.severity === 'moderate') disruptionMultiplier = Math.max(disruptionMultiplier, 5.0);  // 5x safety penalty
+    else if (d.severity === 'minor') disruptionMultiplier = Math.max(disruptionMultiplier, 2.0);
   });
 
   return {
@@ -56,8 +49,8 @@ function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {})
 }
 
 /**
- * Dijkstra shortest (risk-weighted) path between two node ids.
- * Returns { path: [nodeId...], edges: [...], totalKm, totalWeight, avgSpeedKmh, etaMinutes }
+ * Safety-Prioritized Dijkstra Algorithm.
+ * Returns route with safety index, total km, ETA, and segment conditions.
  */
 function findRoute(startId, endId, context = {}) {
   const graph = buildGraph();
@@ -74,13 +67,12 @@ function findRoute(startId, endId, context = {}) {
   const queue = new Set(Object.keys(graph));
 
   while (queue.size) {
-    // Extract min-dist unvisited node (fine for this small graph size)
     let u = null;
     let best = Infinity;
     for (const id of queue) {
       if (dist[id] < best) { best = dist[id]; u = id; }
     }
-    if (u === null) break; // remaining nodes unreachable
+    if (u === null) break;
     queue.delete(u);
     visited.add(u);
     if (u === endId) break;
@@ -97,7 +89,7 @@ function findRoute(startId, endId, context = {}) {
   }
 
   if (dist[endId] === Infinity) {
-    return null; // no viable route (fully blocked network)
+    return null; // no viable non-blocked route
   }
 
   // Reconstruct path
@@ -112,11 +104,16 @@ function findRoute(startId, endId, context = {}) {
 
   const totalKm = pathEdges.reduce((s, e) => s + e.km, 0);
   const totalWeight = dist[endId];
-  // Effective average speed drops as weighted "difficulty" rises relative to raw distance
   const difficultyRatio = totalKm > 0 ? totalWeight / totalKm : 1;
-  const baseSpeed = 45; // km/h baseline on NER highways
-  const avgSpeedKmh = Math.max(12, baseSpeed / difficultyRatio);
+  const baseSpeed = 45; // km/h baseline
+  const avgSpeedKmh = Math.max(12, baseSpeed / Math.sqrt(difficultyRatio));
   const etaMinutes = Math.round((totalKm / avgSpeedKmh) * 60);
+
+  // Compute Safety Score (100% = clear, <60% = high hazard risk)
+  const maxDisruption = pathEdges.reduce((m, e) => Math.max(m, e.disruptionMultiplier || 1), 1);
+  const maxWeather = pathEdges.reduce((m, e) => Math.max(m, e.weatherSeverity || 0), 0);
+  const safetyPenalty = (maxDisruption - 1) * 15 + maxWeather * 40;
+  const safetyIndex = Math.max(15, Math.min(99, Math.round(100 - safetyPenalty)));
 
   const nodeMap = Object.fromEntries(NODES.map((n) => [n.id, n]));
   const path = [startId, ...pathEdges.map((e) => e.to)].map((id) => nodeMap[id]);
@@ -130,18 +127,19 @@ function findRoute(startId, endId, context = {}) {
       road: e.road,
       weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
       disruptionMultiplier: e.disruptionMultiplier || 1,
-      condition: e.weatherSeverity > 0.6 || e.disruptionMultiplier >= 2.5 ? 'disrupted'
-        : (e.weatherSeverity > 0.3 || e.disruptionMultiplier >= 1.3) ? 'caution' : 'clear',
+      condition: e.weatherSeverity > 0.6 || e.disruptionMultiplier >= 4.0 ? 'disrupted'
+        : (e.weatherSeverity > 0.3 || e.disruptionMultiplier >= 1.8) ? 'caution' : 'clear',
     })),
     totalKm: Number(totalKm.toFixed(1)),
     totalWeight: Number(totalWeight.toFixed(1)),
     avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
     etaMinutes,
+    safetyIndex,
   };
 }
 
-/** Find k alternate routes by penalizing edges used in the previous best route. */
-function findAlternateRoutes(startId, endId, context = {}, k = 2) {
+/** Find k alternate routes prioritizing safety over raw distance. */
+function findAlternateRoutes(startId, endId, context = {}, k = 3) {
   const results = [];
   const penalized = new Set();
   for (let i = 0; i < k; i++) {
@@ -160,7 +158,6 @@ function findAlternateRoutes(startId, endId, context = {}, k = 2) {
     const dup = results.some((r) => r.totalKm === route.totalKm && r.edges.length === route.edges.length);
     if (!dup) results.push(route);
     route.edges.forEach((e) => penalized.add(`${e.from.id}|${e.to.id}`));
-    if (results.length && results[results.length - 1].edges.length === 0) break;
   }
   return results;
 }
