@@ -17,11 +17,19 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     const token = tokenStore.get();
     if (token) headers.Authorization = `Bearer ${token}`;
   }
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`${API_URL}${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+  } catch (netErr) {
+    const err = new Error('Network connection unavailable (offline mode)');
+    err.isNetworkError = true;
+    err.status = 0;
+    throw err;
+  }
   let data = null;
   try { data = await res.json(); } catch (_) { /* empty body */ }
   if (!res.ok) {
@@ -32,6 +40,7 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   }
   return data;
 }
+
 
 export const api = {
   // Auth

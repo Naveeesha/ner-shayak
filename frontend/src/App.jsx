@@ -142,10 +142,15 @@ function Login({ onSignup }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  const fillDemo = (demoEmail) => {
+  const fillDemo = async (demoEmail) => {
     setEmail(demoEmail);
     setPassword('sahayak123');
-    setError('');
+    setError(''); setBusy(true);
+    try {
+      await login(demoEmail, 'sahayak123');
+    } catch (err) {
+      setError(err.message); setBusy(false);
+    }
   };
 
   const submit = async (event) => {
@@ -157,6 +162,7 @@ function Login({ onSignup }) {
       setError(err.message); setBusy(false);
     }
   };
+
 
   return (
     <AuthShell intro={<div className="login-intro"><div className="eyebrow">USER ACCESS</div><h2>Sign in to your workspace</h2><p>Enter your credentials to access your dedicated workspace and regional tools.</p></div>}>
