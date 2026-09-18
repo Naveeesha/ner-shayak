@@ -88,11 +88,21 @@ CREATE TABLE IF NOT EXISTS shipments (
 
 // --- Seed demo accounts (idempotent) ---
 const seedUsers = [
-  { name: 'Arjun Bora', email: 'arjun@ner-sahayak.in', role: 'driver', organisation: 'Independent Operator', vehicleNumber: 'AS 01 K 4309', state: 'Assam', district: 'Kamrup Metropolitan', language: 'as' },
+  { name: 'Arjun Bora', email: 'arjun@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AS 01 K 4309', state: 'Assam', district: 'Kamrup Metropolitan', language: 'as' },
+  { name: 'Bikram Das', email: 'bikram@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AS 02 C 8812', state: 'Assam', district: 'Nagaon', language: 'as' },
+  { name: 'Chandan Kalita', email: 'chandan@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AS 06 F 1045', state: 'Assam', district: 'Dibrugarh', language: 'as' },
+  { name: 'Dipankar Saikia', email: 'dipankar@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'TR 01 A 5521', state: 'Tripura', district: 'Agartala', language: 'bn' },
+  { name: 'Eshaan Chettri', email: 'eshaan@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'SK 04 P 9934', state: 'Sikkim', district: 'Gangtok', language: 'en' },
+  { name: 'Farhan Ahmed', email: 'farhan@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'ML 05 D 7710', state: 'Meghalaya', district: 'Shillong', language: 'kha' },
+  { name: 'Gautam Gogoi', email: 'gautam@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AS 03 E 4482', state: 'Assam', district: 'Jorhat', language: 'as' },
+  { name: 'Haokip Zou', email: 'haokip@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'MN 01 L 3319', state: 'Manipur', district: 'Imphal', language: 'mni' },
+  { name: 'Inaobi Singh', email: 'inaobi@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'NL 07 B 2291', state: 'Nagaland', district: 'Dimapur', language: 'nag' },
+  { name: 'Jiten Teron', email: 'jiten@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AR 02 H 6604', state: 'Arunachal Pradesh', district: 'Itanagar', language: 'en' },
   { name: 'Priya Deka', email: 'priya@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit, Nagaon', state: 'Assam', district: 'Nagaon', language: 'as' },
   { name: 'Rohan Sharma', email: 'rohan@ner-sahayak.in', role: 'logistics', organisation: 'NER Freight Movers', hub: 'Khanapara Hub', state: 'Assam', district: 'Kamrup Metropolitan', language: 'hi' },
   { name: 'Ananya Gogoi', email: 'ananya@ner-sahayak.in', role: 'official', organisation: 'DoNER Regional Office', department: 'Disaster Management', state: 'Assam', district: 'Kamrup Metropolitan', language: 'en' },
 ];
+
 
 const insertUser = db.prepare(`INSERT OR IGNORE INTO users
   (id,name,email,passwordHash,phone,role,organisation,vehicleNumber,state,district,language,hub,department,createdAt)

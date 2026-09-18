@@ -1,10 +1,6 @@
-// Road network graph for the North Eastern Region (NER) of India.
-// Nodes = towns/cities/logistics hubs with real approximate coordinates.
-// Edges = real highway/road corridors with base distance (km) and a
-// static terrain-difficulty factor (higher = harder terrain, more
-// landslide/flood prone). This is combined at request time with LIVE
-// weather data + active disruption reports to compute a dynamic risk
-// score used by the Dijkstra route optimizer.
+// Multimodal logistics network graph for the North Eastern Region (NER) of India.
+// Nodes = towns/cities/logistics hubs/ports with real coordinates.
+// Edges = Road Highways, NFR Railway Freight Corridors, & IWAI Inland Waterways (NW-2 / NW-16).
 
 const NODES = [
   { id: 'guwahati',    name: 'Guwahati',    state: 'Assam',            lat: 26.1445, lng: 91.7362, type: 'hub' },
@@ -34,37 +30,52 @@ const NODES = [
   { id: 'siliguri',    name: 'Siliguri',    state: 'West Bengal (gateway)', lat: 26.7271, lng: 88.3953, type: 'hub' },
 ];
 
-// Edges reference real highway corridors (NH27, NH37, NH2, NH6, NH15, NH702 etc.)
-// terrainFactor: 1.0 (plains, easy) -> 2.2 (extreme hill/border terrain)
 const EDGES = [
-  { from: 'guwahati', to: 'tezpur', km: 182, terrainFactor: 1.15, road: 'NH15' },
-  { from: 'tezpur', to: 'jorhat', km: 226, terrainFactor: 1.2, road: 'NH15' },
-  { from: 'jorhat', to: 'dibrugarh', km: 133, terrainFactor: 1.1, road: 'NH37' },
-  { from: 'guwahati', to: 'nagaon', km: 117, terrainFactor: 1.05, road: 'NH27' },
-  { from: 'nagaon', to: 'jorhat', km: 208, terrainFactor: 1.15, road: 'NH27' },
-  { from: 'guwahati', to: 'shillong', km: 100, terrainFactor: 1.5, road: 'NH6' },
-  { from: 'shillong', to: 'jowai', km: 64, terrainFactor: 1.4, road: 'NH6' },
-  { from: 'jowai', to: 'silchar', km: 168, terrainFactor: 1.7, road: 'NH6' },
-  { from: 'shillong', to: 'tura', km: 220, terrainFactor: 1.6, road: 'SH' },
-  { from: 'guwahati', to: 'tura', km: 300, terrainFactor: 1.4, road: 'NH27' },
-  { from: 'silchar', to: 'karimganj', km: 58, terrainFactor: 1.1, road: 'NH37' },
-  { from: 'silchar', to: 'aizawl', km: 180, terrainFactor: 1.9, road: 'NH306' },
-  { from: 'aizawl', to: 'lunglei', km: 120, terrainFactor: 1.8, road: 'NH54' },
-  { from: 'silchar', to: 'agartala', km: 220, terrainFactor: 1.6, road: 'NH8' },
-  { from: 'agartala', to: 'udaipur_tr', km: 55, terrainFactor: 1.1, road: 'NH8' },
-  { from: 'agartala', to: 'karimganj', km: 130, terrainFactor: 1.4, road: 'NH8' },
-  { from: 'nagaon', to: 'dimapur', km: 210, terrainFactor: 1.3, road: 'NH36' },
-  { from: 'dimapur', to: 'kohima', km: 74, terrainFactor: 1.7, road: 'NH29' },
-  { from: 'kohima', to: 'imphal', km: 141, terrainFactor: 1.9, road: 'NH2' },
-  { from: 'dimapur', to: 'imphal', km: 215, terrainFactor: 1.6, road: 'NH2' },
-  { from: 'imphal', to: 'churachandpur', km: 65, terrainFactor: 1.7, road: 'NH150' },
-  { from: 'dimapur', to: 'mokokchung', km: 162, terrainFactor: 1.6, road: 'SH' },
-  { from: 'jorhat', to: 'itanagar', km: 160, terrainFactor: 1.6, road: 'NH415' },
-  { from: 'itanagar', to: 'ziro', km: 115, terrainFactor: 1.9, road: 'NH13' },
-  { from: 'dibrugarh', to: 'pasighat', km: 145, terrainFactor: 1.7, road: 'NH515' },
-  { from: 'tezpur', to: 'tawang', km: 320, terrainFactor: 2.2, road: 'NH13' },
-  { from: 'guwahati', to: 'siliguri', km: 275, terrainFactor: 1.2, road: 'NH27' },
-  { from: 'siliguri', to: 'gangtok', km: 114, terrainFactor: 1.9, road: 'NH10' },
+  // --- ROAD HIGHWAYS ---
+  { from: 'guwahati', to: 'tezpur', km: 182, terrainFactor: 1.15, road: 'NH15', mode: 'road' },
+  { from: 'tezpur', to: 'jorhat', km: 226, terrainFactor: 1.2, road: 'NH15', mode: 'road' },
+  { from: 'jorhat', to: 'dibrugarh', km: 133, terrainFactor: 1.1, road: 'NH37', mode: 'road' },
+  { from: 'guwahati', to: 'nagaon', km: 117, terrainFactor: 1.05, road: 'NH27', mode: 'road' },
+  { from: 'nagaon', to: 'jorhat', km: 208, terrainFactor: 1.15, road: 'NH27', mode: 'road' },
+  { from: 'guwahati', to: 'shillong', km: 100, terrainFactor: 1.5, road: 'NH6', mode: 'road' },
+  { from: 'shillong', to: 'jowai', km: 64, terrainFactor: 1.4, road: 'NH6', mode: 'road' },
+  { from: 'jowai', to: 'silchar', km: 168, terrainFactor: 1.7, road: 'NH6', mode: 'road' },
+  { from: 'shillong', to: 'tura', km: 220, terrainFactor: 1.6, road: 'SH', mode: 'road' },
+  { from: 'guwahati', to: 'tura', km: 300, terrainFactor: 1.4, road: 'NH27', mode: 'road' },
+  { from: 'silchar', to: 'karimganj', km: 58, terrainFactor: 1.1, road: 'NH37', mode: 'road' },
+  { from: 'silchar', to: 'aizawl', km: 180, terrainFactor: 1.9, road: 'NH306', mode: 'road' },
+  { from: 'aizawl', to: 'lunglei', km: 120, terrainFactor: 1.8, road: 'NH54', mode: 'road' },
+  { from: 'silchar', to: 'agartala', km: 220, terrainFactor: 1.6, road: 'NH8', mode: 'road' },
+  { from: 'agartala', to: 'udaipur_tr', km: 55, terrainFactor: 1.1, road: 'NH8', mode: 'road' },
+  { from: 'agartala', to: 'karimganj', km: 130, terrainFactor: 1.4, road: 'NH8', mode: 'road' },
+  { from: 'nagaon', to: 'dimapur', km: 210, terrainFactor: 1.3, road: 'NH36', mode: 'road' },
+  { from: 'dimapur', to: 'kohima', km: 74, terrainFactor: 1.7, road: 'NH29', mode: 'road' },
+  { from: 'kohima', to: 'imphal', km: 141, terrainFactor: 1.9, road: 'NH2', mode: 'road' },
+  { from: 'dimapur', to: 'imphal', km: 215, terrainFactor: 1.6, road: 'NH2', mode: 'road' },
+  { from: 'imphal', to: 'churachandpur', km: 65, terrainFactor: 1.7, road: 'NH150', mode: 'road' },
+  { from: 'dimapur', to: 'mokokchung', km: 162, terrainFactor: 1.6, road: 'SH', mode: 'road' },
+  { from: 'jorhat', to: 'itanagar', km: 160, terrainFactor: 1.6, road: 'NH415', mode: 'road' },
+  { from: 'itanagar', to: 'ziro', km: 115, terrainFactor: 1.9, road: 'NH13', mode: 'road' },
+  { from: 'dibrugarh', to: 'pasighat', km: 145, terrainFactor: 1.7, road: 'NH515', mode: 'road' },
+  { from: 'tezpur', to: 'tawang', km: 320, terrainFactor: 2.2, road: 'NH13', mode: 'road' },
+  { from: 'guwahati', to: 'siliguri', km: 275, terrainFactor: 1.2, road: 'NH27', mode: 'road' },
+  { from: 'siliguri', to: 'gangtok', km: 114, terrainFactor: 1.9, road: 'NH10', mode: 'road' },
+
+  // --- RAILWAY FREIGHT CORRIDORS (Northeast Frontier Railway - NFR) ---
+  { from: 'guwahati', to: 'tezpur', km: 175, terrainFactor: 1.0, road: 'NFR Tezpur Rail Line', mode: 'railway' },
+  { from: 'guwahati', to: 'nagaon', km: 110, terrainFactor: 1.0, road: 'NFR Lumding-Guwahati Rail Corridor', mode: 'railway' },
+  { from: 'nagaon', to: 'jorhat', km: 195, terrainFactor: 1.0, road: 'NFR Upper Assam Freight Rail Line', mode: 'railway' },
+  { from: 'jorhat', to: 'dibrugarh', km: 130, terrainFactor: 1.0, road: 'NFR Tinsukia-Dibrugarh Rail Line', mode: 'railway' },
+  { from: 'nagaon', to: 'dimapur', km: 190, terrainFactor: 1.1, road: 'NFR Nagaland Express Rail Corridor', mode: 'railway' },
+  { from: 'nagaon', to: 'silchar', km: 215, terrainFactor: 1.3, road: 'NFR Hill Section Lumding-Badarpur Freight Rail', mode: 'railway' },
+  { from: 'silchar', to: 'agartala', km: 210, terrainFactor: 1.2, road: 'NFR Tripura Broad-Gauge Rail Line', mode: 'railway' },
+  { from: 'guwahati', to: 'siliguri', km: 260, terrainFactor: 1.0, road: 'NFR Trunk Rail Freight Corridor', mode: 'railway' },
+
+  // --- WATERWAY FREIGHT CORRIDORS (IWAI National Waterways NW-2 & NW-16) ---
+  { from: 'guwahati', to: 'tezpur', km: 190, terrainFactor: 1.0, road: 'NW-2 Brahmaputra River Barges (Pandu ↔ Tezpur Port)', mode: 'waterway' },
+  { from: 'tezpur', to: 'jorhat', km: 210, terrainFactor: 1.0, road: 'NW-2 Brahmaputra Waterway (Tezpur ↔ Neamati Ghat Port)', mode: 'waterway' },
+  { from: 'jorhat', to: 'dibrugarh', km: 140, terrainFactor: 1.0, road: 'NW-2 Upper Brahmaputra Waterway (Neamati ↔ Dibrugarh Port)', mode: 'waterway' },
+  { from: 'silchar', to: 'karimganj', km: 62, terrainFactor: 1.0, road: 'NW-16 Barak River Freight Corridor (Silchar ↔ Karimganj Inland Port)', mode: 'waterway' },
 ];
 
 module.exports = { NODES, EDGES };

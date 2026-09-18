@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import api, { tokenStore } from '../services/api';
+import { DRIVER_ROSTER } from '../services/driverService';
 
 export const USER_ROLES = [
   { id: 'driver', label: 'Driver', icon: 'phone', name: 'Driver workspace', initials: 'DR' },
@@ -16,18 +17,20 @@ export const USER_ROLES = [
   }[r.id],
 }));
 
+
+
 export const DEMO_USERS = [
-  {
-    id: 'u-arjun',
-    name: 'Arjun Bora',
-    email: 'arjun@ner-sahayak.in',
+  ...DRIVER_ROSTER.map((d) => ({
+    id: d.id,
+    name: d.name,
+    email: d.email,
     role: 'driver',
-    organisation: 'Independent Operator',
-    district: 'Kamrup Metropolitan',
-    state: 'Assam',
-    vehicleNumber: 'AS 01 K 4309',
-    phone: '+91 98765 43210',
-  },
+    organisation: 'Registered Logistics Driver',
+    district: d.district,
+    state: d.state,
+    vehicleNumber: d.vehicleNumber,
+    phone: d.phone,
+  })),
   {
     id: 'u-priya',
     name: 'Priya Deka',
@@ -60,6 +63,7 @@ export const DEMO_USERS = [
     phone: '+91 98765 43213',
   },
 ];
+
 
 export const NER_REGION_STATES = [
   'Assam', 'Meghalaya', 'Nagaland', 'Manipur', 'Mizoram', 'Tripura', 'Arunachal Pradesh', 'Sikkim',

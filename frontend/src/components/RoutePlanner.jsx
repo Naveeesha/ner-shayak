@@ -7,6 +7,7 @@ export default function RoutePlanner({ notify }) {
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [origin, setOrigin] = useState('guwahati');
   const [destination, setDestination] = useState('jorhat');
+  const [transportMode, setTransportMode] = useState('all'); // all | road | railway | waterway
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -38,16 +39,16 @@ export default function RoutePlanner({ notify }) {
       notify && notify(`Safest route computed: ${res.recommended.totalKm} km, ETA ${formatMins(res.recommended.etaMinutes)}.`);
     } catch (_) {
       // Client-side fallback computation prioritizing safety over distance
-      const primary = computeSafetyRoute(origin, destination, 1);
-      const saferBypass = computeSafetyRoute(origin, destination, 1.8);
+      const primary = computeSafetyRoute(origin, destination, 1, transportMode);
+      const saferBypass = computeSafetyRoute(origin, destination, 1.8, transportMode);
 
       if (!primary) {
-        setError('No viable safe route found between these locations.');
+        setError('No viable safe route found for the selected transport mode between these locations.');
         setResult(null);
       } else {
         const recommended = { ...primary, safetyIndex: primary.safetyIndex || 95 };
         const alternates = saferBypass && saferBypass.totalKm !== primary.totalKm
-          ? [{ ...saferBypass, safetyIndex: 98, note: 'Safer Hazard Bypass (Longer Distance)' }]
+          ? [{ ...saferBypass, safetyIndex: 98, note: 'Safer Multimodal Bypass Corridor' }]
           : [];
         setResult({ recommended, alternates });
         notify && notify(`Safety-first route calculated: ${recommended.totalKm} km (Safety Score: ${recommended.safetyIndex}%)`);
@@ -94,10 +95,19 @@ export default function RoutePlanner({ notify }) {
             {nodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
           </select>
         </label>
+        <label style={labelStyle}>Transport Mode
+          <select value={transportMode} onChange={(e) => setTransportMode(e.target.value)} style={selectStyle}>
+            <option value="all">🌐 Multimodal (All Modes)</option>
+            <option value="road">🚚 Road Highways</option>
+            <option value="railway">🚂 Railway Freight (NFR)</option>
+            <option value="waterway">🚢 Waterway Barges (NW-2 / NW-16)</option>
+          </select>
+        </label>
         <button type="submit" disabled={busy} style={btnStyle}>
           {busy ? 'Evaluating Safety Corridors…' : '🛡️ Plan Safest Route'}
         </button>
       </form>
+
 
       {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700 }}>{error}</p>}
 
