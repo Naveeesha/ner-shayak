@@ -28,6 +28,14 @@ const NODES = [
   { id: 'tawang',      name: 'Tawang',      state: 'Arunachal Pradesh',lat: 27.5859, lng: 91.8594, type: 'town' },
   { id: 'gangtok',     name: 'Gangtok',     state: 'Sikkim',           lat: 27.3389, lng: 88.6065, type: 'hub' },
   { id: 'siliguri',    name: 'Siliguri',    state: 'West Bengal (gateway)', lat: 26.7271, lng: 88.3953, type: 'hub' },
+  
+  // --- AIRPORTS ---
+  { id: 'guwahati_airport',  name: 'LGBI Airport (GAU)', state: 'Assam', lat: 26.1061, lng: 91.5859, type: 'airport', cargo: true },
+  { id: 'imphal_airport',    name: 'Bir Tikendrajit Airport (IMF)', state: 'Manipur', lat: 24.7600, lng: 93.8967, type: 'airport', cargo: true },
+  { id: 'dibrugarh_airport', name: 'Mohanbari Airport (DIB)', state: 'Assam', lat: 27.4839, lng: 95.0181, type: 'airport', cargo: true },
+  { id: 'agartala_airport',  name: 'MBB Airport (IXA)', state: 'Tripura', lat: 23.8864, lng: 91.2406, type: 'airport', cargo: true },
+  { id: 'silchar_airport',   name: 'Kumbhirgram Airport (IXS)', state: 'Assam', lat: 24.9125, lng: 92.9786, type: 'airport', cargo: false },
+  { id: 'shillong_airport',  name: 'Umroi Airport (SHL)', state: 'Meghalaya', lat: 25.7061, lng: 91.9786, type: 'airport', cargo: false },
 ];
 
 const EDGES = [
@@ -76,6 +84,21 @@ const EDGES = [
   { from: 'tezpur', to: 'jorhat', km: 210, terrainFactor: 1.0, road: 'NW-2 Brahmaputra Waterway (Tezpur ↔ Neamati Ghat Port)', mode: 'waterway' },
   { from: 'jorhat', to: 'dibrugarh', km: 140, terrainFactor: 1.0, road: 'NW-2 Upper Brahmaputra Waterway (Neamati ↔ Dibrugarh Port)', mode: 'waterway' },
   { from: 'silchar', to: 'karimganj', km: 62, terrainFactor: 1.0, road: 'NW-16 Barak River Freight Corridor (Silchar ↔ Karimganj Inland Port)', mode: 'waterway' },
+
+  // --- AIRPORT LAST MILE (ROAD) ---
+  { from: 'guwahati', to: 'guwahati_airport', km: 22, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
+  { from: 'imphal', to: 'imphal_airport', km: 8, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
+  { from: 'dibrugarh', to: 'dibrugarh_airport', km: 15, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
+  { from: 'agartala', to: 'agartala_airport', km: 12, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
+  { from: 'silchar', to: 'silchar_airport', km: 26, terrainFactor: 1.1, road: 'Airport Road', mode: 'road' },
+  { from: 'shillong', to: 'shillong_airport', km: 30, terrainFactor: 1.3, road: 'Airport Road', mode: 'road' },
+
+  // --- AIR CARGO FLIGHTS ---
+  { from: 'guwahati_airport', to: 'imphal_airport', km: 250, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'guwahati_airport', to: 'dibrugarh_airport', km: 350, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'guwahati_airport', to: 'agartala_airport', km: 250, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'guwahati_airport', to: 'silchar_airport', km: 170, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'imphal_airport', to: 'agartala_airport', km: 270, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
 ];
 
 module.exports = { NODES, EDGES };

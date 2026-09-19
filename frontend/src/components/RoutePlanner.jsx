@@ -7,21 +7,28 @@ export default function RoutePlanner({ notify }) {
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [origin, setOrigin] = useState('guwahati');
   const [destination, setDestination] = useState('jorhat');
-  const [transportMode, setTransportMode] = useState('all'); // all | road | railway | waterway
-  const [result, setResult] = useState(null);
+  
+  const [cargoType, setCargoType] = useState('General Cargo');
+  const [cargoWeight, setCargoWeight] = useState('');
+  const [priority, setPriority] = useState('Normal');
+  const [emergencyMode, setEmergencyMode] = useState(false);
+  
+  const [compareResult, setCompareResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [approvalRequests, setApprovalRequests] = useState({}); // idx -> status
+
+  // Remove duplicate airports from dropdowns (we'll just list city nodes to keep it simple, or list all)
+  const cityNodes = nodes.filter(n => n.type !== 'airport');
 
   useEffect(() => {
     api.nodes().then((res) => {
       if (res.nodes && res.nodes.length > 0) {
         setNodes(res.nodes);
-        setOrigin(res.nodes.find((n) => n.id === 'guwahati')?.id || res.nodes[0].id);
-        setDestination(res.nodes.find((n) => n.id === 'jorhat')?.id || res.nodes[1].id);
+        const cities = res.nodes.filter(n => n.type !== 'airport');
+        setOrigin(cities.find((n) => n.id === 'guwahati')?.id || cities[0].id);
+        setDestination(cities.find((n) => n.id === 'jorhat')?.id || cities[1].id);
       }
     }).catch(() => {
-      // Use client nodes fallback
       setNodes(LOCAL_NODES);
     });
   }, []);
@@ -31,181 +38,134 @@ export default function RoutePlanner({ notify }) {
     if (origin === destination) { setError('Origin and destination must be different.'); return; }
     setBusy(true);
     setError('');
-    setApprovalRequests({});
 
     try {
-      const res = await api.planRoute(origin, destination, true);
-      setResult(res);
-      notify && notify(`Safest route computed: ${res.recommended.totalKm} km, ETA ${formatMins(res.recommended.etaMinutes)}.`);
+      const res = await api.compareRoutes({ 
+        originId: origin, 
+        destinationId: destination,
+        cargoType,
+        weight: cargoWeight || 100,
+        priority,
+        emergencyMode
+      });
+      setCompareResult(res);
+      notify && notify(`Multimodal comparison completed. Recommended: ${res.recommendation.mode.toUpperCase()}`);
     } catch (_) {
-      // Client-side fallback computation prioritizing safety over distance
-      const primary = computeSafetyRoute(origin, destination, 1, transportMode);
-      const saferBypass = computeSafetyRoute(origin, destination, 1.8, transportMode);
-
-      if (!primary) {
-        setError('No viable safe route found for the selected transport mode between these locations.');
-        setResult(null);
+      // Client-side fallback computation
+      const road = computeSafetyRoute(origin, destination, 1, 'road');
+      if (!road) {
+        setError('No viable safe route found between these locations.');
+        setCompareResult(null);
       } else {
-        const recommended = { ...primary, safetyIndex: primary.safetyIndex || 95 };
-        const alternates = saferBypass && saferBypass.totalKm !== primary.totalKm
-          ? [{ ...saferBypass, safetyIndex: 98, note: 'Safer Multimodal Bypass Corridor' }]
-          : [];
-        setResult({ recommended, alternates });
-        notify && notify(`Safety-first route calculated: ${recommended.totalKm} km (Safety Score: ${recommended.safetyIndex}%)`);
+        setCompareResult({
+          routes: { road, railway: null, waterway: null, air: null },
+          recommendation: {
+            mode: 'road',
+            reason: 'Offline mode active. Displaying default road route.',
+            route: road
+          }
+        });
+        notify && notify(`Offline road route calculated: ${road.totalKm} km`);
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const handleRequestApproval = (altRoute, idx) => {
-    const originName = nodes.find((n) => n.id === origin)?.name || origin;
-    const destName = nodes.find((n) => n.id === destination)?.name || destination;
-    const reqId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    setApprovalRequests((prev) => ({ ...prev, [idx]: 'PENDING' }));
-
-    // Submit alert to platform if backend available
-    api.createAlert({
-      type: 'ALTERNATE_ROUTE_REQUEST',
-      severity: 'medium',
-      title: `Alternate Route Approval Request #${reqId}`,
-      text: `Vehicle driver requested safer alternate route for ${originName} → ${destName} (${altRoute.totalKm} km, ETA ${formatMins(altRoute.etaMinutes)}). Safety Score: ${altRoute.safetyIndex || 98}%.`,
-    }).catch(() => {});
-
-    notify && notify(`Approval request ${reqId} sent to Logistics Operations Team!`);
-
-    setTimeout(() => {
-      setApprovalRequests((prev) => ({ ...prev, [idx]: 'APPROVED' }));
-      notify && notify(`Logistics Team APPROVED alternate route #${reqId}! Driver cleared for departure.`);
-    }, 2500);
-  };
-
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       {/* Route Form */}
       <form onSubmit={plan} style={formStyle}>
-        <label style={labelStyle}>Origin
-          <select value={origin} onChange={(e) => setOrigin(e.target.value)} style={selectStyle}>
-            {nodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
-          </select>
-        </label>
-        <label style={labelStyle}>Destination
-          <select value={destination} onChange={(e) => setDestination(e.target.value)} style={selectStyle}>
-            {nodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
-          </select>
-        </label>
-        <label style={labelStyle}>Transport Mode
-          <select value={transportMode} onChange={(e) => setTransportMode(e.target.value)} style={selectStyle}>
-            <option value="all">🌐 Multimodal (All Modes)</option>
-            <option value="road">🚚 Road Highways</option>
-            <option value="railway">🚂 Railway Freight (NFR)</option>
-            <option value="waterway">🚢 Waterway Barges (NW-2 / NW-16)</option>
-          </select>
-        </label>
-        <button type="submit" disabled={busy} style={btnStyle}>
-          {busy ? 'Evaluating Safety Corridors…' : '🛡️ Plan Safest Route'}
-        </button>
-      </form>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
+          <label style={labelStyle}>Origin
+            <select value={origin} onChange={(e) => setOrigin(e.target.value)} style={selectStyle}>
+              {cityNodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
+            </select>
+          </label>
+          <label style={labelStyle}>Destination
+            <select value={destination} onChange={(e) => setDestination(e.target.value)} style={selectStyle}>
+              {cityNodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
+            </select>
+          </label>
+        </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, width: '100%' }}>
+          <label style={labelStyle}>Cargo Type
+            <select value={cargoType} onChange={(e) => setCargoType(e.target.value)} style={selectStyle}>
+              <option>General Cargo</option>
+              <option>Perishable</option>
+              <option>Pharmaceutical / Medicine</option>
+              <option>Emergency Supplies</option>
+              <option>High Value</option>
+              <option>Heavy Cargo</option>
+            </select>
+          </label>
+          <label style={labelStyle}>Weight (kg)
+            <input type="number" placeholder="e.g. 500" value={cargoWeight} onChange={(e) => setCargoWeight(e.target.value)} style={selectStyle} />
+          </label>
+          <label style={labelStyle}>Priority
+            <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
+              <option>Normal</option>
+              <option>High</option>
+              <option>Emergency</option>
+            </select>
+          </label>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: emergencyMode ? '#dc2626' : '#4b5563', cursor: 'pointer' }}>
+            <input type="checkbox" checked={emergencyMode} onChange={(e) => setEmergencyMode(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#dc2626' }} />
+            🚨 Emergency Logistics Mode
+          </label>
+          
+          <button type="submit" disabled={busy} style={btnStyle}>
+            {busy ? 'Evaluating Multimodal Corridors…' : '⚖️ Compare Routes'}
+          </button>
+        </div>
+      </form>
 
       {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700 }}>{error}</p>}
 
-      {result && (
+      {compareResult && compareResult.recommendation && (
         <div style={{ display: 'grid', gap: 18 }}>
-          {/* Map display */}
-          <LiveMap height={340} focusRouteEdges={result.recommended.edges} />
-
-          {/* Stats Bar */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: 12 }}>
-            <Stat label="Safety Index" value={`🟢 ${result.recommended.safetyIndex || 96}% Safe`} highlight />
-            <Stat label="Total Distance" value={`${result.recommended.totalKm} km`} />
-            <Stat label="Estimated Time" value={formatMins(result.recommended.etaMinutes)} />
-            <Stat label="Safety Speed" value={`${result.recommended.avgSpeedKmh || 42} km/h`} />
-          </div>
-
-          {/* Priority Note */}
-          <div style={{ padding: '12px 16px', background: '#eef8f2', border: '1px solid #cce5d7', borderRadius: 8, fontSize: 11, color: '#165744', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 18 }}>🛡️</span>
-            <div>
-              <b>Safety-First Routing Active:</b> Route optimization prioritizes hazard-free terrain and low-flood corridors. Longer distances and higher travel times are accepted when they guarantee delivery safety.
+          
+          {/* Recommendation Banner */}
+          <div style={recommendationBanner(emergencyMode)}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <span style={{ fontSize: 22 }}>{emergencyMode ? '🚨' : '🧠'}</span>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Risk-Aware Multimodal Recommendation</h3>
             </div>
+            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, opacity: 0.95 }}>
+              {compareResult.recommendation.reason}
+            </p>
           </div>
 
-          {/* Route Segments */}
-          <div>
-            <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>PRIMARY SAFETY CORRIDOR SEGMENTS</h4>
+          {/* Map display */}
+          <LiveMap height={340} focusRouteEdges={compareResult.recommendation.route.edges} />
+
+          {/* Multimodal Comparison Cards */}
+          <h4 style={{ fontSize: 13, color: '#374151', margin: '10px 0 0 0', fontWeight: 800 }}>Available Multimodal Options</h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <ModeCard mode="road" title="ROAD" icon="🚚" route={compareResult.routes.road} isRecommended={compareResult.recommendation.mode === 'road'} />
+            <ModeCard mode="railway" title="RAIL + ROAD" icon="🚂" route={compareResult.routes.railway} isRecommended={compareResult.recommendation.mode === 'railway'} />
+            <ModeCard mode="waterway" title="WATERWAY + ROAD" icon="🚢" route={compareResult.routes.waterway} isRecommended={compareResult.recommendation.mode === 'waterway'} />
+            <ModeCard mode="air" title="AIR + ROAD" icon="✈️" route={compareResult.routes.air} isRecommended={compareResult.recommendation.mode === 'air'} />
+          </div>
+
+          {/* Route Segments for Recommended */}
+          <div style={{ marginTop: 10 }}>
+            <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>RECOMMENDED ROUTE SEGMENTS</h4>
             <div style={{ display: 'grid', gap: 6 }}>
-              {result.recommended.edges.map((e, i) => (
+              {compareResult.recommendation.route.edges.map((e, i) => (
                 <div key={i} style={segmentStyle}>
                   <span style={{ fontWeight: 700 }}>{e.from.name} → {e.to.name}</span>
-                  <span style={{ color: '#7c8f87' }}>{e.road} · {e.km} km</span>
+                  <span style={{ color: '#7c8f87' }}>[{e.mode.toUpperCase()}] {e.road} · {e.km} km</span>
                   <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
-                    {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution / Rain' : '🔴 Disrupted'}
+                    {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution' : '🔴 Disrupted'}
                   </span>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Alternate Routes & Approval Requests */}
-          <div style={{ padding: '16px 18px', background: '#f8faf9', border: '1px solid #dce7e1', borderRadius: 9 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div>
-                <h4 style={{ fontSize: 13, color: '#25483d', margin: 0, fontWeight: 800 }}>ALTERNATE SAFER BYPASS ROUTES</h4>
-                <small style={{ color: '#7c8f87', fontSize: 10 }}>Request logistics team authorization for alternative bypasses</small>
-              </div>
-            </div>
-
-            {(!result.alternates || result.alternates.length === 0) ? (
-              <div style={{ fontSize: 11, color: '#7c8f87', padding: '10px 0' }}>
-                Primary route is currently optimal. Click below to generate a safety bypass option:
-                <br />
-                <button
-                  onClick={() => {
-                    const alt = computeSafetyRoute(origin, destination, 1.9);
-                    if (alt) setResult((prev) => ({ ...prev, alternates: [{ ...alt, safetyIndex: 98, note: 'Landslide & Flood Avoidance Bypass' }] }));
-                  }}
-                  style={{ ...secondaryBtn, marginTop: 8 }}
-                >
-                  ⚡ Suggest Alternate Safer Bypass
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gap: 10 }}>
-                {result.alternates.map((alt, idx) => {
-                  const status = approvalRequests[idx];
-                  return (
-                    <div key={idx} style={altCardStyle}>
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <b style={{ fontSize: 12, color: '#165744' }}>Alternate Route {idx + 1}: Safety Bypass Corridor</b>
-                          <span style={safetyTag}>🟢 {alt.safetyIndex || 98}% Safety Index</span>
-                        </div>
-                        <div style={{ fontSize: 11, color: '#5f756d', marginTop: 4 }}>
-                          Distance: <b>{alt.totalKm} km</b> (+{(alt.totalKm - result.recommended.totalKm).toFixed(1)} km longer) · ETA: <b>{formatMins(alt.etaMinutes)}</b> (+{Math.max(5, alt.etaMinutes - result.recommended.etaMinutes)} mins)
-                        </div>
-                        <div style={{ fontSize: 10, color: '#889b93', marginTop: 2 }}>
-                          {alt.note || 'Prioritizes non-disrupted high ground highways around active hazard zones.'}
-                        </div>
-                      </div>
-
-                      <div>
-                        {status === 'APPROVED' ? (
-                          <span style={approvedBadge}>✓ Approved by Logistics Team</span>
-                        ) : status === 'PENDING' ? (
-                          <span style={pendingBadge}>⏳ Awaiting Logistics Approval…</span>
-                        ) : (
-                          <button onClick={() => handleRequestApproval(alt, idx)} style={approveBtn}>
-                            📋 Request Logistics Team Approval
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -213,11 +173,38 @@ export default function RoutePlanner({ notify }) {
   );
 }
 
-function Stat({ label, value, highlight }) {
+function ModeCard({ title, icon, route, isRecommended }) {
+  if (!route) {
+    return (
+      <div style={{ ...modeCardBase, opacity: 0.5, background: '#f3f4f6' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+          <span>{icon}</span>
+          <b style={{ fontSize: 12, color: '#6b7280' }}>{title}</b>
+        </div>
+        <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Route unavailable</div>
+      </div>
+    );
+  }
+
+  const borderCol = isRecommended ? '#10b981' : '#e5e7eb';
+  const bgCol = isRecommended ? '#ecfdf5' : '#ffffff';
+
   return (
-    <div style={{ padding: '12px 14px', border: `1px solid ${highlight ? '#bde3d0' : '#e1e9e3'}`, borderRadius: 8, background: highlight ? '#f2faf5' : '#fbfdfb' }}>
-      <div style={{ fontSize: 9, fontWeight: 800, color: highlight ? '#176d55' : '#8aa097', letterSpacing: 1 }}>{label.toUpperCase()}</div>
-      <div style={{ fontSize: 17, fontWeight: 800, color: highlight ? '#12483a' : '#25483d', marginTop: 4 }}>{value}</div>
+    <div style={{ ...modeCardBase, border: `2px solid ${borderCol}`, background: bgCol, position: 'relative' }}>
+      {isRecommended && (
+        <div style={{ position: 'absolute', top: -10, right: 10, background: '#10b981', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>
+          RECOMMENDED
+        </div>
+      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+        <b style={{ fontSize: 13, color: '#1f2937' }}>{title}</b>
+      </div>
+      <div style={{ display: 'grid', gap: 6 }}>
+        <div style={cardRow}><span style={cardLabel}>Time:</span> <span style={{ fontWeight: 800, color: '#111827' }}>{formatMins(route.etaMinutes)}</span></div>
+        <div style={cardRow}><span style={cardLabel}>Distance:</span> <span style={{ fontWeight: 700, color: '#4b5563' }}>{route.totalKm} km</span></div>
+        <div style={cardRow}><span style={cardLabel}>Safety:</span> <span style={{ fontWeight: 800, color: route.safetyIndex > 80 ? '#059669' : '#d97706' }}>{route.safetyIndex}%</span></div>
+      </div>
     </div>
   );
 }
@@ -232,14 +219,27 @@ function conditionColor(c) {
   return { clear: '#3ea274', caution: '#bd7e22', disrupted: '#b5493a', blocked: '#8a1f1f' }[c] || '#7c8f87';
 }
 
-const formStyle = { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' };
-const labelStyle = { display: 'grid', gap: 6, fontSize: 11, fontWeight: 800, color: '#3f5951', minWidth: 200 };
-const selectStyle = { height: 43, padding: '0 12px', border: '1px solid #dce5df', borderRadius: 7, fontSize: 13 };
-const btnStyle = { height: 43, padding: '0 18px', border: 0, borderRadius: 7, color: '#fff', background: '#1e745b', fontSize: 12, fontWeight: 800, cursor: 'pointer' };
-const secondaryBtn = { padding: '8px 14px', border: '1px solid #c2ded0', borderRadius: 6, background: '#f0f9f4', color: '#176d55', fontSize: 11, fontWeight: 800, cursor: 'pointer' };
+const formStyle = { display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', background: '#f9fafb', padding: 16, borderRadius: 10, border: '1px solid #e5e7eb' };
+const labelStyle = { display: 'grid', gap: 6, fontSize: 11, fontWeight: 800, color: '#4b5563' };
+const selectStyle = { height: 40, padding: '0 12px', border: '1px solid #d1d5db', borderRadius: 7, fontSize: 13, width: '100%' };
+const btnStyle = { height: 44, padding: '0 24px', border: 0, borderRadius: 7, color: '#fff', background: '#0f766e', fontSize: 13, fontWeight: 800, cursor: 'pointer', transition: 'background 0.2s' };
 const segmentStyle = { display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 12, padding: '10px 12px', border: '1px solid #edf1ee', borderRadius: 7, fontSize: 11, alignItems: 'center' };
-const altCardStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', border: '1px solid #d8e6de', borderRadius: 8, background: '#ffffff', gap: 12, flexWrap: 'wrap' };
-const safetyTag = { padding: '2px 8px', borderRadius: 12, background: '#e3f5eb', color: '#14634d', fontSize: 10, fontWeight: 800 };
-const approveBtn = { padding: '8px 14px', border: 0, borderRadius: 6, background: '#1e745b', color: '#ffffff', fontSize: 11, fontWeight: 800, cursor: 'pointer' };
-const pendingBadge = { padding: '6px 12px', borderRadius: 6, background: '#fef3d6', color: '#a06e12', fontSize: 10, fontWeight: 800 };
-const approvedBadge = { padding: '6px 12px', borderRadius: 6, background: '#e1f5eb', color: '#13614b', fontSize: 10, fontWeight: 800 };
+
+const recommendationBanner = (isEmergency) => ({
+  padding: '16px 20px',
+  background: isEmergency ? 'linear-gradient(135deg, #fef2f2, #fee2e2)' : 'linear-gradient(135deg, #f0fdf4, #dcfce7)',
+  border: `1px solid ${isEmergency ? '#fca5a5' : '#86efac'}`,
+  borderRadius: 10,
+  color: isEmergency ? '#991b1b' : '#166534',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.02)'
+});
+
+const modeCardBase = {
+  padding: 14,
+  borderRadius: 10,
+  boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+  transition: 'all 0.2s'
+};
+
+const cardRow = { display: 'flex', justifyContent: 'space-between', fontSize: 12 };
+const cardLabel = { color: '#6b7280', fontWeight: 600 };

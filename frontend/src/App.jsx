@@ -78,6 +78,7 @@ const navForRole = (role) => {
   }
   return [
     ['Overview', 'grid'],
+    ['Logistics Overview', 'grid'],
     ['Team directory', 'grid'],
     ['Live map', 'map'],
     ['Route planner', 'route'],
@@ -345,6 +346,7 @@ function PageView({ page, role, notify, navigate }) {
     'Field reports': ['Field reports & hazards', 'Share a geo-tagged update that helps the wider network respond.', 'report'],
     Settings: ['Workspace settings', 'Manage notification preferences, language, and night driving mode.', 'settings'],
     'Team directory': ['Team directory', 'Every registered driver, field officer, logistics operator, and official across the network.', 'grid'],
+    'Logistics Overview': ['Logistics Overview', 'Monitor active cargo routes, backlogs, and assign drivers.', 'grid'],
     'Cargo shipments': ['Cargo dispatch queue', 'Manage shipment routes, dispatch priorities, and delivery status.', 'route'],
     'Fleet tracking': ['Fleet GPS tracking', 'Live vehicle positions, telematics, and driver tracking.', 'phone'],
     'Vehicle telemetry': ['Vehicle GPS telemetry', 'Manage assigned vehicle, telemetry fixes, and journey position.', 'phone'],
@@ -366,6 +368,7 @@ function PageView({ page, role, notify, navigate }) {
       {page === 'Field reports' && <FieldReportForm notify={notify} />}
       {page === 'Settings' && <SettingsPanel notify={notify} />}
       {page === 'Team directory' && <UsersDirectory />}
+      {page === 'Logistics Overview' && <LogisticsOverview notify={notify} navigate={navigate} />}
       {(page === 'Cargo shipments' || page === 'Fleet tracking' || page === 'Vehicle telemetry') && <VehicleTracker notify={notify} />}
     </section>
   );

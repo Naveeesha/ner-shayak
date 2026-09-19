@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
 CREATE TABLE IF NOT EXISTS shipments (
   id TEXT PRIMARY KEY,
   vehicleId TEXT,
+  driverId TEXT,
   createdBy TEXT NOT NULL,
   originNode TEXT NOT NULL,
   destinationNode TEXT NOT NULL,
@@ -99,8 +100,28 @@ const seedUsers = [
   { name: 'Inaobi Singh', email: 'inaobi@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'NL 07 B 2291', state: 'Nagaland', district: 'Dimapur', language: 'nag' },
   { name: 'Jiten Teron', email: 'jiten@ner-sahayak.in', role: 'driver', organisation: 'Registered Driver', vehicleNumber: 'AR 02 H 6604', state: 'Arunachal Pradesh', district: 'Itanagar', language: 'en' },
   { name: 'Priya Deka', email: 'priya@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit, Nagaon', state: 'Assam', district: 'Nagaon', language: 'as' },
+  { name: 'Amitabh Sharma', email: 'amitabh@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Assam', district: 'Guwahati', language: 'hi' },
+  { name: 'Ritu Phukan', email: 'ritu@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Assam', district: 'Tezpur', language: 'as' },
+  { name: 'Samuel Sangma', email: 'samuel@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Meghalaya', district: 'Tura', language: 'en' },
+  { name: 'Lalmingthanga', email: 'lalmingthanga@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Mizoram', district: 'Aizawl', language: 'en' },
+  { name: 'Zothanpari', email: 'zothanpari@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Mizoram', district: 'Lunglei', language: 'en' },
+  { name: 'Khupkholam', email: 'khupkholam@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Manipur', district: 'Churachandpur', language: 'en' },
+  { name: 'Sanjita Devi', email: 'sanjita@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Manipur', district: 'Imphal', language: 'mni' },
+  { name: 'Tashi Namgyal', email: 'tashi@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Arunachal Pradesh', district: 'Tawang', language: 'en' },
+  { name: 'Millo Tarin', email: 'millo@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Arunachal Pradesh', district: 'Ziro', language: 'en' },
+  { name: 'Subhash Deb', email: 'subhash@ner-sahayak.in', role: 'field', organisation: 'PWD Field Unit', state: 'Tripura', district: 'Agartala', language: 'bn' },
   { name: 'Rohan Sharma', email: 'rohan@ner-sahayak.in', role: 'logistics', organisation: 'NER Freight Movers', hub: 'Khanapara Hub', state: 'Assam', district: 'Kamrup Metropolitan', language: 'hi' },
   { name: 'Ananya Gogoi', email: 'ananya@ner-sahayak.in', role: 'official', organisation: 'DoNER Regional Office', department: 'Disaster Management', state: 'Assam', district: 'Kamrup Metropolitan', language: 'en' },
+  { name: 'Naveen Jindal', email: 'naveen@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Infrastructure', state: 'Assam', district: 'Guwahati', language: 'en' },
+  { name: 'Sneha Boro', email: 'sneha@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Disaster Management', state: 'Assam', district: 'Tezpur', language: 'en' },
+  { name: 'Wanlamkupar', email: 'wanlamkupar@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Infrastructure', state: 'Meghalaya', district: 'Shillong', language: 'en' },
+  { name: 'Biakzuala', email: 'biakzuala@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Disaster Management', state: 'Mizoram', district: 'Aizawl', language: 'en' },
+  { name: 'R. K. Singh', email: 'rk.singh@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Infrastructure', state: 'Manipur', district: 'Imphal', language: 'en' },
+  { name: 'Neiphiu', email: 'neiphiu@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Disaster Management', state: 'Nagaland', district: 'Kohima', language: 'en' },
+  { name: 'Sentila', email: 'sentila@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Infrastructure', state: 'Nagaland', district: 'Dimapur', language: 'en' },
+  { name: 'Pema', email: 'pema@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Disaster Management', state: 'Arunachal Pradesh', district: 'Itanagar', language: 'en' },
+  { name: 'Karma Bhutia', email: 'karma@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Infrastructure', state: 'Sikkim', district: 'Gangtok', language: 'en' },
+  { name: 'Sushmita Sen', email: 'sushmita@ner-sahayak.in', role: 'official', organisation: 'DoNER', department: 'Disaster Management', state: 'Tripura', district: 'Agartala', language: 'en' },
 ];
 
 
@@ -137,6 +158,14 @@ if (existing === 0) {
   const guwahati = NODES.find((n) => n.id === 'guwahati');
   if (!guwahati) throw new Error('Seed data error: guwahati node not found in nerNetwork');
   insertVehicle.run({ id: uuid(), ownerId: owner.id, vehicleNumber: 'AS 01 K 4309', cargoType: 'Medical supplies', originNode: 'guwahati', destinationNode: 'jorhat', status: 'in_transit', lat: guwahati.lat, lng: guwahati.lng, lastUpdated: new Date().toISOString() });
+
+  // Seed field reports (issues and solved)
+  const insertReport = db.prepare(`INSERT INTO field_reports (id,userId,nodeId,road,fromNode,toNode,category,severity,title,description,lat,lng,status,synced,createdAt)
+    VALUES (@id,@userId,@nodeId,@road,@fromNode,@toNode,@category,@severity,@title,@description,@lat,@lng,@status,@synced,@createdAt)`);
+  const fieldUser = db.prepare('SELECT id FROM users WHERE email = ?').get('priya@ner-sahayak.in');
+  insertReport.run({ id: uuid(), userId: fieldUser.id, nodeId: 'nagaon', road: 'NH27', fromNode: 'guwahati', toNode: 'nagaon', category: 'landslide', severity: 'high', title: 'Landslide on NH27', description: 'Debris blocking one lane.', lat: 26.25, lng: 92.2, status: 'open', synced: 1, createdAt: new Date().toISOString() });
+  insertReport.run({ id: uuid(), userId: fieldUser.id, nodeId: 'tezpur', road: 'NH15', fromNode: 'tezpur', toNode: 'jorhat', category: 'flood', severity: 'medium', title: 'Waterlogging near Tezpur', description: 'Slow movement.', lat: 26.6, lng: 92.7, status: 'open', synced: 1, createdAt: new Date().toISOString() });
+  insertReport.run({ id: uuid(), userId: fieldUser.id, nodeId: 'shillong', road: 'NH6', fromNode: 'guwahati', toNode: 'shillong', category: 'road_block', severity: 'minor', title: 'Clearing work', description: 'Road block removed.', lat: 25.8, lng: 91.8, status: 'resolved', synced: 1, createdAt: new Date().toISOString() });
 }
 
 module.exports = db;

@@ -64,4 +64,20 @@ router.patch('/:id/status', requireAuth, (req, res) => {
   res.json({ shipment: { ...row, route: row.routeJson ? JSON.parse(row.routeJson) : null } });
 });
 
+router.patch('/:id/assign', requireAuth, (req, res) => {
+  const { driverId } = req.body || {};
+  if (!driverId) return res.status(400).json({ error: 'driverId is required' });
+
+  const existing = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
+  if (!existing) return res.status(404).json({ error: 'Shipment not found' });
+  
+  if (req.user.role !== 'official' && req.user.role !== 'logistics') {
+    return res.status(403).json({ error: 'You do not have permission to assign drivers' });
+  }
+
+  db.prepare('UPDATE shipments SET driverId = ? WHERE id = ?').run(driverId, req.params.id);
+  const row = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
+  res.json({ shipment: { ...row, route: row.routeJson ? JSON.parse(row.routeJson) : null } });
+});
+
 module.exports = router;

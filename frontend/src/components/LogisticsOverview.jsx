@@ -11,7 +11,6 @@ export default function LogisticsOverview({ navigate, notify }) {
   const [loading, setLoading] = useState(true);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
-  const [assignedDrivers, setAssignedDrivers] = useState({});
 
   const load = () => {
     setLoading(true);
@@ -45,8 +44,14 @@ export default function LogisticsOverview({ navigate, notify }) {
     setAssignModalOpen(true);
   };
 
-  const handleDriverAssigned = (driver, shp) => {
-    setAssignedDrivers((prev) => ({ ...prev, [shp.id]: driver }));
+  const handleDriverAssigned = async (driver, shp) => {
+    try {
+      const res = await api.assignDriver(shp.id, driver.id);
+      setShipments(prev => prev.map(s => s.id === shp.id ? res.shipment : s));
+      notify(`Driver ${driver.name} assigned to shipment.`);
+    } catch (err) {
+      notify(`Failed to assign driver: ${err.message}`);
+    }
   };
 
   const planned = shipments.filter((s) => s.status === 'planned').length;
@@ -59,10 +64,10 @@ export default function LogisticsOverview({ navigate, notify }) {
       <section className="card" style={{ padding: '18px 20px', background: 'linear-gradient(135deg, #1b5344, #123d32)', color: '#fff' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#b9ead7' }}>LOGISTICS OPERATOR CONTROL ROOM</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.5, color: '#b9ead7' }}>{user.role === 'official' ? 'GOVERNMENT OFFICIAL LOGISTICS VIEW' : 'LOGISTICS OPERATOR CONTROL ROOM'}</div>
             <h2 style={{ color: '#fff', fontSize: 20, margin: '4px 0 2px' }}>{user.name}</h2>
             <div style={{ fontSize: 11, color: '#d2f2e5' }}>
-              Company: <b>{user.organisation || 'NER Freight Movers'}</b> · Hub: <b>{user.hub || 'Khanapara Hub'}</b>
+              {user.role === 'official' ? `Department: ${user.department || 'Govt'}` : `Company: ${user.organisation || 'NER Freight Movers'} · Hub: ${user.hub || 'Khanapara Hub'}`}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -106,7 +111,7 @@ export default function LogisticsOverview({ navigate, notify }) {
           )}
           <div style={{ display: 'grid', gap: 10 }}>
             {shipments.slice(0, 6).map((s, idx) => {
-              const assignedDriver = assignedDrivers[s.id] || DRIVER_ROSTER[idx % 10];
+              const assignedDriver = DRIVER_ROSTER.find(d => d.id === s.driverId) || DRIVER_ROSTER[idx % 10];
               return (
                 <div key={s.id} style={{ padding: '12px 14px', border: '1px solid #edf1ee', borderRadius: 8, background: '#fbfdfb' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#25483d' }}>
@@ -119,7 +124,7 @@ export default function LogisticsOverview({ navigate, notify }) {
 
                   <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2ede6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontSize: 10, color: '#165744', fontWeight: 700 }}>
-                      👤 Driver: <b>{assignedDriver.name}</b> ({assignedDriver.vehicleNumber})
+                      👤 Driver: <b>{s.driverId ? assignedDriver.name : 'Unassigned (Mock: ' + assignedDriver.name + ')'}</b> ({assignedDriver.vehicleNumber})
                     </div>
                     <button
                       onClick={() => openAssignModal(s)}

@@ -52,8 +52,9 @@ export const api = {
   // Network / GIS / routing
   nodes: () => request('/network/nodes'),
   edges: () => request('/network/edges'),
-  planRoute: (originId, destinationId, alternates = true) =>
-    request('/network/route', { method: 'POST', body: { originId, destinationId, alternates } }),
+  planRoute: (originId, destinationId, alternates = true, mode = 'all') =>
+    request('/network/route', { method: 'POST', body: { originId, destinationId, alternates, mode } }),
+  compareRoutes: (payload) => request('/network/compare', { method: 'POST', body: payload }),
 
   // Weather
   weatherAll: () => request('/weather/all'),
@@ -80,6 +81,7 @@ export const api = {
   shipments: () => request('/shipments'),
   createShipment: (payload) => request('/shipments', { method: 'POST', body: payload }),
   updateShipmentStatus: (id, status) => request(`/shipments/${id}/status`, { method: 'PATCH', body: { status } }),
+  assignDriver: (id, driverId) => request(`/shipments/${id}/assign`, { method: 'PATCH', body: { driverId } }),
 
   // Dashboard
   dashboardSummary: () => request('/dashboard/summary'),

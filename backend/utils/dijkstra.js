@@ -4,8 +4,9 @@ function buildGraph() {
   const clean = {};
   NODES.forEach((n) => { clean[n.id] = []; });
   EDGES.forEach((e) => {
-    clean[e.from].push({ from: e.from, to: e.to, km: e.km, terrainFactor: e.terrainFactor, road: e.road });
-    clean[e.to].push({ from: e.to, to: e.from, km: e.km, terrainFactor: e.terrainFactor, road: e.road });
+    const mode = e.mode || 'road';
+    clean[e.from].push({ from: e.from, to: e.to, km: e.km, terrainFactor: e.terrainFactor, road: e.road, mode });
+    clean[e.to].push({ from: e.to, to: e.from, km: e.km, terrainFactor: e.terrainFactor, road: e.road, mode });
   });
   return clean;
 }
@@ -78,12 +79,26 @@ function findRoute(startId, endId, context = {}) {
     if (u === endId) break;
 
     for (const edge of graph[u]) {
+      let modePenalty = 1.0;
+      if (context.mode && context.mode !== 'all') {
+        if (edge.mode !== context.mode) {
+          // If preferred mode is not road, allow road with a penalty (for first/last mile)
+          if (edge.mode === 'road' && (context.mode === 'air' || context.mode === 'railway' || context.mode === 'waterway')) {
+            modePenalty = 3.0; // strong penalty to keep road usage minimal
+          } else {
+            continue; // completely disallow other modes (e.g., no trains on a 'waterway' route)
+          }
+        }
+      }
+
       const { weight, weatherSeverity, disruptionMultiplier, blocked } = edgeWeight(edge, context);
       if (blocked) continue;
-      const alt = dist[u] + weight;
+      
+      const finalWeight = weight * modePenalty;
+      const alt = dist[u] + finalWeight;
       if (alt < dist[edge.to]) {
         dist[edge.to] = alt;
-        prevEdge[edge.to] = { ...edge, weatherSeverity, disruptionMultiplier };
+        prevEdge[edge.to] = { ...edge, weatherSeverity, disruptionMultiplier, modePenalty };
       }
     }
   }
@@ -104,10 +119,22 @@ function findRoute(startId, endId, context = {}) {
 
   const totalKm = pathEdges.reduce((s, e) => s + e.km, 0);
   const totalWeight = dist[endId];
-  const difficultyRatio = totalKm > 0 ? totalWeight / totalKm : 1;
-  const baseSpeed = 45; // km/h baseline
-  const avgSpeedKmh = Math.max(12, baseSpeed / Math.sqrt(difficultyRatio));
-  const etaMinutes = Math.round((totalKm / avgSpeedKmh) * 60);
+  
+  let totalMinutes = 0;
+  pathEdges.forEach(e => {
+    let baseSpeed = 45;
+    if (e.mode === 'air') baseSpeed = 500;
+    else if (e.mode === 'railway') baseSpeed = 55;
+    else if (e.mode === 'waterway') baseSpeed = 24;
+    
+    // Penalize speed by safety risk
+    const edgeRatio = (e.disruptionMultiplier || 1) * Math.max(1, (e.weatherSeverity || 0) * 2);
+    const speed = Math.max(12, baseSpeed / Math.sqrt(edgeRatio));
+    totalMinutes += (e.km / speed) * 60;
+  });
+  
+  const etaMinutes = Math.round(totalMinutes);
+  const avgSpeedKmh = totalKm > 0 ? Number((totalKm / (etaMinutes / 60)).toFixed(1)) : 0;
 
   // Compute Safety Score (100% = clear, <60% = high hazard risk)
   const maxDisruption = pathEdges.reduce((m, e) => Math.max(m, e.disruptionMultiplier || 1), 1);
@@ -125,6 +152,7 @@ function findRoute(startId, endId, context = {}) {
       to: nodeMap[e.to],
       km: e.km,
       road: e.road,
+      mode: e.mode,
       weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
       disruptionMultiplier: e.disruptionMultiplier || 1,
       condition: e.weatherSeverity > 0.6 || e.disruptionMultiplier >= 4.0 ? 'disrupted'

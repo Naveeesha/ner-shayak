@@ -45,6 +45,7 @@ router.get('/edges', requireAuth, async (req, res) => {
         km: e.km,
         road: e.road,
         condition,
+        mode: e.mode,
         weatherSeverity: Number(weatherSeverity.toFixed(2)),
       };
     });
@@ -67,15 +68,40 @@ function getActiveDisruptions() {
   }));
 }
 
-// POST /api/network/route  { originId, destinationId, alternates? }
-// Core AI/ML-assisted route optimization endpoint: pulls live weather +
-// live field-reported disruptions and runs risk-weighted Dijkstra.
+// POST /api/network/route  { originId, destinationId, alternates?, mode? }
 router.post('/route', requireAuth, async (req, res) => {
-  const { originId, destinationId, alternates = true } = req.body || {};
+  const { originId, destinationId, alternates = true, mode = 'all' } = req.body || {};
   if (!originId || !destinationId) return res.status(400).json({ error: 'originId and destinationId are required' });
-  if (!NODES.find((n) => n.id === originId) || !NODES.find((n) => n.id === destinationId)) {
-    return res.status(404).json({ error: 'Unknown origin or destination' });
+  
+  try {
+    const weatherSeverityByNode = {};
+    await Promise.all(NODES.map(async (n) => {
+      try {
+        const w = await fetchNodeWeather(n);
+        weatherSeverityByNode[n.id] = w.severity;
+      } catch (_) { weatherSeverityByNode[n.id] = 0; }
+    }));
+    const disruptions = getActiveDisruptions();
+    const context = { weatherSeverityByNode, disruptions, mode };
+
+    const best = findRoute(originId, destinationId, context);
+    if (!best) return res.status(422).json({ error: 'No viable route found' });
+
+    let alternateRoutes = [];
+    if (alternates) {
+      alternateRoutes = findAlternateRoutes(originId, destinationId, context, 3).filter((r) => r.totalKm !== best.totalKm);
+    }
+    res.json({ recommended: best, alternates: alternateRoutes.slice(0, 2), computedAt: new Date().toISOString() });
+  } catch (err) {
+    res.status(500).json({ error: 'Route computation failed', detail: err.message });
   }
+});
+
+// POST /api/network/compare
+// Computes multimodal options and applies cargo intelligence
+router.post('/compare', requireAuth, async (req, res) => {
+  const { originId, destinationId, cargoType = 'General Cargo', weight = 100, priority = 'Normal', emergencyMode = false } = req.body || {};
+  if (!originId || !destinationId) return res.status(400).json({ error: 'originId and destinationId are required' });
 
   try {
     const weatherSeverityByNode = {};
@@ -86,19 +112,97 @@ router.post('/route', requireAuth, async (req, res) => {
       } catch (_) { weatherSeverityByNode[n.id] = 0; }
     }));
     const disruptions = getActiveDisruptions();
-    const context = { weatherSeverityByNode, disruptions };
+    
+    const computeForMode = (modeName) => {
+      const route = findRoute(originId, destinationId, { weatherSeverityByNode, disruptions, mode: modeName });
+      if (!route) return null;
+      // If we requested a specific mode, but the route has none of those edges, it's just a fallback (e.g. road)
+      if (modeName !== 'road' && modeName !== 'all') {
+        const hasMode = route.edges.some(e => e.mode === modeName);
+        if (!hasMode) return null; // That mode doesn't actually connect these points
+      }
+      return route;
+    };
 
-    const best = findRoute(originId, destinationId, context);
-    if (!best) return res.status(422).json({ error: 'No viable route found — network is fully disrupted between these points' });
+    const routes = {
+      road: computeForMode('road'),
+      railway: computeForMode('railway'),
+      waterway: computeForMode('waterway'),
+      air: computeForMode('air')
+    };
 
-    let alternateRoutes = [];
-    if (alternates) {
-      alternateRoutes = findAlternateRoutes(originId, destinationId, context, 3).filter((r) => r.totalKm !== best.totalKm);
+    // --- CARGO INTELLIGENCE RECOMMENDATION ---
+    let recommendedMode = 'road';
+    let recommendationReason = 'Road provides a balanced route for this delivery.';
+
+    const isEmergency = emergencyMode || priority === 'Emergency';
+    const isHeavy = cargoType === 'Heavy Cargo' || Number(weight) > 5000;
+
+    // Filter to available routes
+    const available = Object.keys(routes).filter(k => routes[k] !== null);
+    
+    if (available.length === 0) {
+      return res.status(422).json({ error: 'No viable route found for any mode.' });
     }
 
-    res.json({ recommended: best, alternates: alternateRoutes.slice(0, 2), computedAt: new Date().toISOString() });
+    if (available.length > 0) {
+      if (isEmergency) {
+        // Prefer fastest available
+        let fastest = available[0];
+        available.forEach(m => {
+          if (routes[m].etaMinutes < routes[fastest].etaMinutes) fastest = m;
+        });
+        
+        // If Air is available and cargo isn't too heavy, use Air
+        if (routes.air && !isHeavy) {
+          recommendedMode = 'air';
+          recommendationReason = 'Emergency mode prioritized this route because time is critical, and air transport provides the fastest delivery for medical/emergency supplies.';
+        } else {
+          recommendedMode = fastest;
+          recommendationReason = `Emergency mode prioritized this route because it is the fastest available option (${routes[fastest].etaMinutes} mins) given the cargo profile and network availability.`;
+        }
+      } else if (isHeavy) {
+        // Prefer Waterway or Rail for Heavy cargo
+        if (routes.waterway) {
+          recommendedMode = 'waterway';
+          recommendationReason = 'Waterway transport is highly recommended for heavy cargo as it is the most cost-effective and capable mode for massive freight.';
+        } else if (routes.railway) {
+          recommendedMode = 'railway';
+          recommendationReason = 'Railway freight is prioritized for heavy cargo as it offers better capacity and lower risk than road transport over long distances.';
+        } else {
+          recommendedMode = 'road';
+          recommendationReason = 'Road transport is recommended as rail/waterway links are unavailable for this route.';
+        }
+      } else if (priority === 'High' && routes.air && Number(weight) < 1000) {
+          recommendedMode = 'air';
+          recommendationReason = 'High priority and low weight makes air transport the optimal choice for rapid delivery.';
+      } else {
+        // Normal priority: balance safety and availability
+        // Default to rail if safe, otherwise road
+        if (routes.railway && routes.railway.safetyIndex > 80) {
+          recommendedMode = 'railway';
+          recommendationReason = 'Railway provides a secure, efficient bulk transport corridor for general cargo.';
+        } else if (routes.road) {
+          recommendedMode = 'road';
+          recommendationReason = 'Road highways provide the most direct and reliable routing for general cargo on this path.';
+        } else {
+          recommendedMode = available[0];
+          recommendationReason = `Network disruptions forced a fallback to the only available mode (${available[0]}).`;
+        }
+      }
+    }
+
+    res.json({
+      routes,
+      recommendation: {
+        mode: recommendedMode,
+        reason: recommendationReason,
+        route: routes[recommendedMode]
+      },
+      computedAt: new Date().toISOString()
+    });
   } catch (err) {
-    res.status(500).json({ error: 'Route computation failed', detail: err.message });
+    res.status(500).json({ error: 'Route comparison failed', detail: err.message });
   }
 });
 
