@@ -5,31 +5,37 @@ const { NODES } = require('../data/nerNetwork');
 
 const router = express.Router();
 
-// Simple in-memory cache to avoid hammering the free weather API.
+// Simple in-memory cache to avoid hammering the weather API.
 const cache = new Map();
 const CACHE_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
- * Convert Open-Meteo weathercode + precipitation + wind into a 0-1 severity
+ * Convert OpenWeatherMap condition codes + precipitation + wind into a 0-1 severity
  * score used to weight the route optimizer, plus a human label.
- * https://open-meteo.com/en/docs (WMO weather codes)
+ * https://openweathermap.org/weather-conditions
  */
 function scoreWeather(current) {
-  const code = current.weathercode;
-  const wind = current.windspeed || 0;
-  const precip = current.precipitation ?? 0;
+  // Extract data from OpenWeatherMap response
+  const code = current.weather && current.weather.length > 0 ? current.weather[0].id : 800;
+  // Convert m/s to km/h for wind
+  const wind = current.wind && current.wind.speed ? current.wind.speed * 3.6 : 0; 
+  // Get 1 hour rain volume if available (mm)
+  const precip = current.rain && current.rain['1h'] ? current.rain['1h'] : 0; 
 
   let severity = 0;
   let label = 'Clear';
 
-  if ([95, 96, 99].includes(code)) { severity = 0.95; label = 'Thunderstorm'; }
-  else if ([65, 82, 67].includes(code)) { severity = 0.9; label = 'Heavy rain'; }
-  else if ([63, 81].includes(code)) { severity = 0.65; label = 'Moderate rain'; }
-  else if ([61, 51, 53, 55, 80].includes(code)) { severity = 0.35; label = 'Light rain'; }
-  else if ([71, 73, 75, 77, 85, 86].includes(code)) { severity = 0.8; label = 'Snow'; }
-  else if ([45, 48].includes(code)) { severity = 0.4; label = 'Fog'; }
-  else if ([1, 2, 3].includes(code)) { severity = 0.1; label = 'Partly cloudy'; }
-  else { severity = 0.05; label = 'Clear'; }
+  if (code >= 200 && code < 300) { severity = 0.95; label = 'Thunderstorm'; }
+  else if (code >= 300 && code < 400) { severity = 0.35; label = 'Drizzle'; }
+  else if (code >= 500 && code < 600) { 
+    if (code === 500) { severity = 0.35; label = 'Light rain'; }
+    else if (code === 501) { severity = 0.65; label = 'Moderate rain'; }
+    else { severity = 0.9; label = 'Heavy rain'; }
+  }
+  else if (code >= 600 && code < 700) { severity = 0.8; label = 'Snow'; }
+  else if (code >= 700 && code < 800) { severity = 0.4; label = 'Fog/Mist'; }
+  else if (code === 800) { severity = 0.05; label = 'Clear'; }
+  else if (code > 800) { severity = 0.1; label = 'Clouds'; }
 
   if (wind > 40) severity = Math.min(1, severity + 0.2);
   if (precip > 10) severity = Math.min(1, severity + 0.15);
@@ -42,28 +48,26 @@ async function fetchNodeWeather(node) {
   const cached = cache.get(key);
   if (cached && Date.now() - cached.time < CACHE_MS) return cached.data;
 
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${node.lat}&longitude=${node.lng}&current_weather=true&hourly=precipitation&timezone=auto`;
-  const resp = await fetch(url, { timeout: 8000 });
-  if (!resp.ok) throw new Error(`Weather API error for ${node.name}: ${resp.status}`);
-  const json = await resp.json();
-  const current = json.current_weather || {};
-  // find current hour precipitation if available
-  let precipNow = 0;
-  try {
-    const idx = json.hourly.time.indexOf(current.time);
-    if (idx >= 0) precipNow = json.hourly.precipitation[idx] ?? 0;
-  } catch (_) { /* ignore */ }
+  const apiKey = process.env.OPENWEATHER_API_KEY || process.env.WEATHER_API_KEY;
+  if (!apiKey) {
+    throw new Error('WEATHER_API_KEY is missing from environment variables');
+  }
 
-  const scored = scoreWeather({ ...current, precipitation: precipNow });
+  const url = `https://api.openweathermap.org/data/2.5/weather?lat=${node.lat}&lon=${node.lng}&appid=${apiKey}&units=metric`;
+  const resp = await fetch(url, { timeout: 8000 });
+  if (!resp.ok) throw new Error(`OpenWeather API error for ${node.name}: ${resp.status} ${resp.statusText}`);
+  const json = await resp.json();
+
+  const scored = scoreWeather(json);
   const data = {
     nodeId: node.id,
     name: node.name,
     lat: node.lat,
     lng: node.lng,
-    temperature: current.temperature,
-    windspeed: current.windspeed,
+    temperature: json.main ? json.main.temp : null,
+    windspeed: scored.windspeed, // mapped to km/h by scoreWeather
     ...scored,
-    observedAt: current.time,
+    observedAt: new Date().toISOString(),
   };
   cache.set(key, { time: Date.now(), data });
   return data;
