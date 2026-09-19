@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { DRIVER_ROSTER } from '../services/driverService';
 
 export default function DriverAssignModal({ isOpen, onClose, targetItem, onDriverAssigned, notify }) {
-  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [search, setSearch] = useState('');
 
   if (!isOpen) return null;

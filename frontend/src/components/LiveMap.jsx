@@ -7,29 +7,23 @@ import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES } from '../services/routeCal
 import { DRIVER_ROSTER } from '../services/driverService';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
-const MODE_COLOR = { road: '#3ea274', railway: '#475569', waterway: '#0284c7', air: '#9333ea' };
 
 export default function LiveMap({ height = 440, focusRouteEdges = null }) {
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [edges, setEdges] = useState(LOCAL_EDGES);
-  const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [modeFilter, setModeFilter] = useState('all'); // all | road | railway | waterway | air
-  const [lastFetched, setLastFetched] = useState(new Date());
 
   const load = async () => {
     try {
       const [nodeRes, edgeRes] = await Promise.all([api.nodes(), api.edges()]);
       if (nodeRes.nodes) setNodes(nodeRes.nodes);
       if (edgeRes.edges) setEdges(edgeRes.edges);
-      setLastFetched(new Date());
     } catch (_) {
       // Offline fallback: use local nodes and edges
       setNodes(LOCAL_NODES);
       setEdges(LOCAL_EDGES);
       setIsOfflineMode(true);
-    } finally {
-      setLoading(false);
     }
   };
 

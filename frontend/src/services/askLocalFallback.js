@@ -25,7 +25,7 @@ export function generateBrowserAIResponse(query, user = {}) {
 
   // 1. Math / Arithmetic calculation check (e.g. 2+2, 15 * 4, 100 / 5)
   const cleanMath = q.replace(/\s+/g, '');
-  const mathMatch = cleanMath.match(/^(\d+(?:\.\d+)?)([\+\-*\/])(\d+(?:\.\d+)?)$/);
+  const mathMatch = cleanMath.match(/^(\d+(?:\.\d+)?)([-+*/])(\d+(?:\.\d+)?)$/);
 
   if (mathMatch) {
     const n1 = parseFloat(mathMatch[1]);

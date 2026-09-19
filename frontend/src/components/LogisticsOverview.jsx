@@ -56,7 +56,6 @@ export default function LogisticsOverview({ navigate, notify }) {
 
   const planned = shipments.filter((s) => s.status === 'planned').length;
   const inTransit = shipments.filter((s) => s.status === 'in_transit').length;
-  const delivered = shipments.filter((s) => s.status === 'delivered').length;
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
