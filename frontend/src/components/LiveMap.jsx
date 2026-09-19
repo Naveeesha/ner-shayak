@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, LayersControl, LayerGroup } from 'react-leaflet';
-import L from 'leaflet';
+import { divIcon } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../services/api';
 import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES } from '../services/routeCalculator';
@@ -136,7 +136,7 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
                     <Marker 
                       key={n.id} 
                       position={[n.lat, n.lng]}
-                      icon={new L.DivIcon({
+                      icon={divIcon({
                         html: '<div style="font-size:16px; background:#fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.3); border: 2px solid #9333ea;">✈️</div>',
                         className: 'custom-airport-icon',
                         iconSize: [24, 24],
