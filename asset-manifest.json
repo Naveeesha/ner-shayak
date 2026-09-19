@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/ner-shayak/static/css/main.84ee9f79.css",
-    "main.js": "/ner-shayak/static/js/main.311924ec.js",
-    "index.html": "/ner-shayak/index.html",
-    "main.84ee9f79.css.map": "/ner-shayak/static/css/main.84ee9f79.css.map",
-    "main.311924ec.js.map": "/ner-shayak/static/js/main.311924ec.js.map"
+    "main.css": "./static/css/main.84ee9f79.css",
+    "main.js": "./static/js/main.84fc5340.js",
+    "index.html": "./index.html",
+    "main.84ee9f79.css.map": "./static/css/main.84ee9f79.css.map",
+    "main.84fc5340.js.map": "./static/js/main.84fc5340.js.map"
   },
   "entrypoints": [
     "static/css/main.84ee9f79.css",
-    "static/js/main.311924ec.js"
+    "static/js/main.84fc5340.js"
   ]
 }
