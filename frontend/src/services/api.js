@@ -13,7 +13,35 @@ export const tokenStore = {
 
 function mockFallback(path) {
   if (path.startsWith('/dashboard/summary')) {
-    return { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3, activeAlerts: 2, totalNodes: 24, totalEdges: 38 };
+    return {
+      activeVehicles: 8,
+      totalVehicles: 10,
+      regionAccessCoveragePct: 88,
+      openFieldReports: 3,
+      criticalReports: 1,
+      districtConnectivity: [
+        { nodeId: 'n-guwahati', name: 'Kamrup Metro', state: 'Assam', score: 95, status: 'connected', openReports: 0 },
+        { nodeId: 'n-shillong', name: 'East Khasi Hills', state: 'Meghalaya', score: 82, status: 'connected', openReports: 1 },
+        { nodeId: 'n-silchar', name: 'Cachar', state: 'Assam', score: 68, status: 'partial', openReports: 2 },
+        { nodeId: 'n-imphal', name: 'Imphal East', state: 'Manipur', score: 54, status: 'partial', openReports: 1 },
+        { nodeId: 'n-kohima', name: 'Kohima', state: 'Nagaland', score: 78, status: 'connected', openReports: 0 },
+        { nodeId: 'n-agartala', name: 'West Tripura', state: 'Tripura', score: 90, status: 'connected', openReports: 0 },
+        { nodeId: 'n-aizawl', name: 'Aizawl', state: 'Mizoram', score: 62, status: 'partial', openReports: 1 },
+        { nodeId: 'n-itanagar', name: 'Papum Pare', state: 'Arunachal Pradesh', score: 72, status: 'connected', openReports: 0 },
+        { nodeId: 'n-gangtok', name: 'East Sikkim', state: 'Sikkim', score: 85, status: 'connected', openReports: 0 },
+      ],
+      logisticsBottlenecks: [
+        { from: 'Guwahati', to: 'Shillong', road: 'NH27 / NH102', km: 99, activeReports: 1, riskScore: 35 },
+        { from: 'Silchar', to: 'Imphal', road: 'NH37', km: 135, activeReports: 2, riskScore: 72 },
+      ],
+      shipments: {
+        planned: 4,
+        inTransit: 8,
+        delayed: 1,
+        delivered: 12,
+      },
+      generatedAt: new Date().toISOString(),
+    };
   }
   if (path.startsWith('/network/nodes')) return { nodes: [] };
   if (path.startsWith('/network/edges')) return { edges: [] };
