@@ -11,6 +11,22 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
+function mockFallback(path) {
+  if (path.startsWith('/dashboard/summary')) {
+    return { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3, activeAlerts: 2, totalNodes: 24, totalEdges: 38 };
+  }
+  if (path.startsWith('/network/nodes')) return { nodes: [] };
+  if (path.startsWith('/network/edges')) return { edges: [] };
+  if (path.startsWith('/weather')) return { weather: [] };
+  if (path.startsWith('/alerts')) return { alerts: [] };
+  if (path.startsWith('/reports')) return { reports: [] };
+  if (path.startsWith('/vehicles')) return { vehicles: [] };
+  if (path.startsWith('/shipments')) return { shipments: [] };
+  if (path.startsWith('/users')) return { users: [] };
+  if (path.startsWith('/health')) return { status: 'ok', mode: 'offline-static' };
+  return {};
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {
@@ -25,10 +41,15 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (netErr) {
-    const err = new Error('Network connection unavailable (offline mode)');
-    err.isNetworkError = true;
-    err.status = 0;
-    throw err;
+    // On auth endpoints, rethrow network error so AuthContext demo fallback handles it
+    if (path.startsWith('/auth/')) {
+      const err = new Error('Network connection unavailable (offline mode)');
+      err.isNetworkError = true;
+      err.status = 0;
+      throw err;
+    }
+    // For all other endpoints on static hosting, return fallback data
+    return mockFallback(path);
   }
   let data = null;
   try { data = await res.json(); } catch (_) { /* empty body */ }

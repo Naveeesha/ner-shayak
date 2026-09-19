@@ -59,6 +59,22 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
     <div style={{ position: 'relative', width: '100%', height, background: '#eaf4ee', borderRadius: 10, overflow: 'hidden', border: '1px solid #d4e5db' }}>
       {/* Top Controls Bar */}
       <div style={topControlsStyle}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['all', 'road', 'railway', 'waterway', 'air'].map(m => (
+            <button
+              key={m}
+              onClick={() => setModeFilter(m)}
+              style={{
+                ...filterTabStyle(modeFilter === m),
+                padding: '4px 8px',
+                fontSize: 9,
+                textTransform: 'capitalize'
+              }}
+            >
+              {m === 'all' ? 'All Modes' : m}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setIsOfflineMode(!isOfflineMode)}
           style={{ ...filterTabStyle(isOfflineMode), background: isOfflineMode ? '#175b4a' : '#ffffff', color: isOfflineMode ? '#ffffff' : '#175b4a' }}
