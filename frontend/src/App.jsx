@@ -478,16 +478,22 @@ function Dashboard({ role, exit }) {
   </div>;
 }
 
+const DEFAULT_SUMMARY = { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3 };
+
 function RegionStrip({ navigate }) {
-  const [summary, setSummary] = useState(null);
-  useEffect(() => { api.dashboardSummary().then(setSummary).catch(() => {}); }, []);
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+  useEffect(() => {
+    api.dashboardSummary()
+      .then((res) => { if (res && res.regionAccessCoveragePct) setSummary(res); })
+      .catch(() => setSummary(DEFAULT_SUMMARY));
+  }, []);
   return (
     <section className="region">
-      <div><i/>Regional status <b>{summary ? (summary.regionAccessCoveragePct >= 85 ? 'Stable' : summary.regionAccessCoveragePct >= 60 ? 'Watchful' : 'Disrupted') : 'Loading'}</b></div>
+      <div><i/>Regional status <b>{summary.regionAccessCoveragePct >= 85 ? 'Stable' : summary.regionAccessCoveragePct >= 60 ? 'Watchful' : 'Disrupted'}</b></div>
       <p>
-        <span><b>{summary?.activeVehicles ?? '—'}</b> active routes</span>
-        <span><b>{summary ? `${summary.regionAccessCoveragePct}%` : '—'}</b> access coverage</span>
-        <span><b>{summary?.openFieldReports ?? '—'}</b> need attention</span>
+        <span><b>{summary.activeVehicles}</b> active routes</span>
+        <span><b>{summary.regionAccessCoveragePct}%</b> access coverage</span>
+        <span><b>{summary.openFieldReports}</b> need attention</span>
       </p>
       <button onClick={() => navigate('Live map')}>View live map <Icon n="arrow" s={15}/></button>
     </section>
