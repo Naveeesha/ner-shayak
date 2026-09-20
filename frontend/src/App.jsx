@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState, Component } from 'react';
 import './App.css';
 import { AuthProvider, LANGUAGES, NER_REGION_STATES, USER_ROLES, useAuth } from './context/AuthContext';
 import { useTranslation } from './hooks/useTranslation';
@@ -501,6 +501,8 @@ function Dashboard({ role, exit }) {
   </div>;
 }
 
+const DEFAULT_SUMMARY = { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3 };
+
 function RegionStrip({ navigate }) {
   const { t } = useTranslation();
   const [summary, setSummary] = useState(null);
@@ -518,10 +520,47 @@ function RegionStrip({ navigate }) {
   );
 }
 
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('NER-Sahayak caught rendering error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0e2b22', color: '#ffffff', padding: 24, textAlign: 'center', fontFamily: 'sans-serif' }}>
+          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: 8, color: '#ccf363' }}>NER-Sahayak Intelligence Network</h2>
+          <p style={{ color: '#d2f2e5', maxWidth: 460, margin: '8px 0 24px', lineHeight: 1.5, fontSize: '0.95rem' }}>
+            An unexpected error occurred while rendering this component. Click below to reload your session safely.
+          </p>
+          <button onClick={() => window.location.reload()} style={{ background: '#ccf363', color: '#0e2b22', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+            🔄 Reload Application
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function AppShell() {
   const { user, logout, ready } = useAuth();
   const [authView, setAuthView] = useState('login');
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0e2b22', color: '#ccf363', fontFamily: 'sans-serif', gap: 12 }}>
+        <div style={{ width: 32, height: 32, border: '3px solid #ccf363', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <span style={{ fontSize: '0.9rem', fontWeight: 600, letterSpacing: '0.5px' }}>Loading NER-Sahayak Platform…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
   if (!user) {
     return authView === 'signup'
       ? <Signup onLogin={() => setAuthView('login')}/>
@@ -532,8 +571,10 @@ function AppShell() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppShell />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppShell />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

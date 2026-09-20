@@ -8,7 +8,6 @@ import { DRIVER_ROSTER } from '../services/driverService';
 import { useTranslation } from '../hooks/useTranslation';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
-const MODE_COLOR = { road: '#3ea274', railway: '#475569', waterway: '#0284c7', air: '#9333ea' };
 
 function MapCenterer() {
   const map = useMap();
@@ -32,7 +31,6 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
   const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [modeFilter, setModeFilter] = useState('all'); // all | road | railway | waterway | air
-  const [lastFetched, setLastFetched] = useState(new Date());
 
   const load = async () => {
     try {
@@ -50,8 +48,6 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
       setNodes(LOCAL_NODES);
       setEdges(LOCAL_EDGES);
       setIsOfflineMode(true);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -110,6 +106,22 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
     <div style={{ position: 'relative', width: '100%', height, background: '#eaf4ee', borderRadius: 10, overflow: 'hidden', border: '1px solid #d4e5db' }}>
       {/* Top Controls Bar */}
       <div style={topControlsStyle}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          {['all', 'road', 'railway', 'waterway', 'air'].map(m => (
+            <button
+              key={m}
+              onClick={() => setModeFilter(m)}
+              style={{
+                ...filterTabStyle(modeFilter === m),
+                padding: '4px 8px',
+                fontSize: 9,
+                textTransform: 'capitalize'
+              }}
+            >
+              {m === 'all' ? 'All Modes' : m}
+            </button>
+          ))}
+        </div>
         <button
           onClick={() => setIsOfflineMode(!isOfflineMode)}
           style={{ ...filterTabStyle(isOfflineMode), background: isOfflineMode ? '#175b4a' : '#ffffff', color: isOfflineMode ? '#ffffff' : '#175b4a' }}
@@ -248,7 +260,7 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
                     <Marker 
                       key={n.id} 
                       position={[n.lat, n.lng]}
-                      icon={new L.DivIcon({
+                      icon={divIcon({
                         html: '<div style="font-size:16px; background:#fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.3); border: 2px solid #9333ea;">✈️</div>',
                         className: 'custom-airport-icon',
                         iconSize: [24, 24],

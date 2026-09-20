@@ -11,6 +11,50 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
+function mockFallback(path) {
+  if (path.startsWith('/dashboard/summary')) {
+    return {
+      activeVehicles: 8,
+      totalVehicles: 10,
+      regionAccessCoveragePct: 88,
+      openFieldReports: 3,
+      criticalReports: 1,
+      districtConnectivity: [
+        { nodeId: 'n-guwahati', name: 'Kamrup Metro', state: 'Assam', score: 95, status: 'connected', openReports: 0 },
+        { nodeId: 'n-shillong', name: 'East Khasi Hills', state: 'Meghalaya', score: 82, status: 'connected', openReports: 1 },
+        { nodeId: 'n-silchar', name: 'Cachar', state: 'Assam', score: 68, status: 'partial', openReports: 2 },
+        { nodeId: 'n-imphal', name: 'Imphal East', state: 'Manipur', score: 54, status: 'partial', openReports: 1 },
+        { nodeId: 'n-kohima', name: 'Kohima', state: 'Nagaland', score: 78, status: 'connected', openReports: 0 },
+        { nodeId: 'n-agartala', name: 'West Tripura', state: 'Tripura', score: 90, status: 'connected', openReports: 0 },
+        { nodeId: 'n-aizawl', name: 'Aizawl', state: 'Mizoram', score: 62, status: 'partial', openReports: 1 },
+        { nodeId: 'n-itanagar', name: 'Papum Pare', state: 'Arunachal Pradesh', score: 72, status: 'connected', openReports: 0 },
+        { nodeId: 'n-gangtok', name: 'East Sikkim', state: 'Sikkim', score: 85, status: 'connected', openReports: 0 },
+      ],
+      logisticsBottlenecks: [
+        { from: 'Guwahati', to: 'Shillong', road: 'NH27 / NH102', km: 99, activeReports: 1, riskScore: 35 },
+        { from: 'Silchar', to: 'Imphal', road: 'NH37', km: 135, activeReports: 2, riskScore: 72 },
+      ],
+      shipments: {
+        planned: 4,
+        inTransit: 8,
+        delayed: 1,
+        delivered: 12,
+      },
+      generatedAt: new Date().toISOString(),
+    };
+  }
+  if (path.startsWith('/network/nodes')) return { nodes: [] };
+  if (path.startsWith('/network/edges')) return { edges: [] };
+  if (path.startsWith('/weather')) return { weather: [] };
+  if (path.startsWith('/alerts')) return { alerts: [] };
+  if (path.startsWith('/reports')) return { reports: [] };
+  if (path.startsWith('/vehicles')) return { vehicles: [] };
+  if (path.startsWith('/shipments')) return { shipments: [] };
+  if (path.startsWith('/users')) return { users: [] };
+  if (path.startsWith('/health')) return { status: 'ok', mode: 'offline-static' };
+  return {};
+}
+
 async function request(path, { method = 'GET', body, auth = true } = {}) {
   const headers = { 'Content-Type': 'application/json' };
   if (auth) {
@@ -25,10 +69,15 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (netErr) {
-    const err = new Error('Network connection unavailable (offline mode)');
-    err.isNetworkError = true;
-    err.status = 0;
-    throw err;
+    // On auth endpoints, rethrow network error so AuthContext demo fallback handles it
+    if (path.startsWith('/auth/')) {
+      const err = new Error('Network connection unavailable (offline mode)');
+      err.isNetworkError = true;
+      err.status = 0;
+      throw err;
+    }
+    // For all other endpoints on static hosting, return fallback data
+    return mockFallback(path);
   }
   let data = null;
   try { data = await res.json(); } catch (_) { /* empty body */ }
