@@ -28,11 +28,22 @@ function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {})
 
   // Active field disruption reports (landslide, flood, bridge damage)
   const relevant = disruptions.filter((d) => {
-    if (d.fromNode && d.toNode) {
-      return (d.fromNode === edge.from && d.toNode === edge.to) || 
-             (d.fromNode === edge.to && d.toNode === edge.from);
+    // If road is specified, match road name
+    if (d.road && edge.road && d.road.toLowerCase().trim() === edge.road.toLowerCase().trim()) {
+      return true;
     }
-    if (d.road) return d.road === edge.road;
+    // If fromNode and toNode match
+    if (d.fromNode && d.toNode) {
+      const matchEndpoints = (d.fromNode === edge.from && d.toNode === edge.to) || 
+                             (d.fromNode === edge.to && d.toNode === edge.from);
+      if (matchEndpoints) {
+        // If disruption specifies a road (like NH27), and this edge is a railway/waterway line, do NOT cross-pollinate
+        if (d.road && edge.road && d.road.toUpperCase() !== edge.road.toUpperCase() && edge.mode !== 'road') {
+          return false;
+        }
+        return true;
+      }
+    }
     return false;
   });
   let disruptionMultiplier = 1;
@@ -240,7 +251,7 @@ function buildRouteResult(startId, endId, pathEdges, totalWeight, nodeMap) {
   const totalKm = pathEdges.reduce((s, e) => s + e.km, 0);
 
   let totalMinutes = 0;
-  pathEdges.forEach((e) => {
+  const segments = pathEdges.map((e) => {
     let baseSpeed = 45;
     if (e.mode === 'air') baseSpeed = 500;
     else if (e.mode === 'railway') baseSpeed = 55;
@@ -248,36 +259,109 @@ function buildRouteResult(startId, endId, pathEdges, totalWeight, nodeMap) {
 
     const edgeRatio = (e.disruptionMultiplier || 1) * Math.max(1, (e.weatherSeverity || 0) * 2);
     const speed = Math.max(12, baseSpeed / Math.sqrt(edgeRatio));
+    const segmentTime = Math.round((e.km / speed) * 60);
     totalMinutes += (e.km / speed) * 60;
+
+    // Segment condition
+    const isDisrupted = (e.weatherSeverity > 0.6 || (e.disruptionMultiplier && e.disruptionMultiplier >= 4.0));
+    const isCaution = (e.weatherSeverity > 0.3 || (e.disruptionMultiplier && e.disruptionMultiplier >= 1.8));
+    const condition = isDisrupted ? 'disrupted' : (isCaution ? 'caution' : 'clear');
+
+    // Individual segment safety percentage (0-100)
+    let segmentSafety = 98;
+    if (e.disruptionMultiplier >= 15) segmentSafety -= 55;
+    else if (e.disruptionMultiplier >= 5) segmentSafety -= 35;
+    else if (e.disruptionMultiplier >= 2) segmentSafety -= 15;
+
+    segmentSafety -= Math.round((e.weatherSeverity || 0) * 25);
+    if (e.terrainFactor && e.terrainFactor > 1.3) {
+      segmentSafety -= Math.round((e.terrainFactor - 1) * 10);
+    }
+    segmentSafety = Math.max(15, Math.min(99, segmentSafety));
+
+    return {
+      from: nodeMap[e.from],
+      to: nodeMap[e.to],
+      km: e.km,
+      distance: e.km,
+      time: segmentTime,
+      road: e.road,
+      corridor: e.road,
+      mode: e.mode || 'road',
+      weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
+      disruptionMultiplier: e.disruptionMultiplier || 1,
+      condition,
+      risk: condition,
+      status: condition,
+      safetyIndex: segmentSafety,
+    };
   });
 
   const etaMinutes = Math.round(totalMinutes);
   const avgSpeedKmh = totalKm > 0 ? Number((totalKm / (etaMinutes / 60)).toFixed(1)) : 0;
 
-  const maxDisruption = pathEdges.reduce((m, e) => Math.max(m, e.disruptionMultiplier || 1), 1);
-  const maxWeather = pathEdges.reduce((m, e) => Math.max(m, e.weatherSeverity || 0), 0);
-  const safetyPenalty = (maxDisruption - 1) * 15 + maxWeather * 40;
-  const safetyIndex = Math.max(15, Math.min(99, Math.round(100 - safetyPenalty)));
+  // Distance-weighted safety aggregation across all segments
+  let weightedSafetySum = 0;
+  segments.forEach((seg) => {
+    weightedSafetySum += seg.km * seg.safetyIndex;
+  });
+  let routeSafety = totalKm > 0 ? (weightedSafetySum / totalKm) : 95;
+
+  // Corridor hazard damping if any segment has severe disruption
+  const hasSevereDisruption = segments.some((s) => s.disruptionMultiplier >= 14);
+  const hasModerateDisruption = segments.some((s) => s.disruptionMultiplier >= 4);
+  if (hasSevereDisruption) {
+    routeSafety = Math.min(routeSafety, 55);
+  } else if (hasModerateDisruption) {
+    routeSafety = Math.min(routeSafety, 78);
+  }
+  const safetyIndex = Math.max(15, Math.min(99, Math.round(routeSafety)));
+
+  // Identify multimodal transfer nodes
+  const transfers = [];
+  for (let i = 0; i < pathEdges.length - 1; i++) {
+    if (pathEdges[i].mode !== pathEdges[i + 1].mode) {
+      transfers.push({
+        node: nodeMap[pathEdges[i].to],
+        fromMode: pathEdges[i].mode,
+        toMode: pathEdges[i + 1].mode,
+        name: nodeMap[pathEdges[i].to]?.name || pathEdges[i].to,
+      });
+    }
+  }
+
+  // Determine dominant mode label
+  const hasAir = pathEdges.some((e) => e.mode === 'air');
+  const hasRailway = pathEdges.some((e) => e.mode === 'railway');
+  const hasWaterway = pathEdges.some((e) => e.mode === 'waterway');
+  let modeLabel = 'ROAD';
+  let primaryMode = 'road';
+  if (hasAir) {
+    modeLabel = 'AIR + ROAD';
+    primaryMode = 'air';
+  } else if (hasRailway) {
+    modeLabel = 'RAIL + ROAD';
+    primaryMode = 'railway';
+  } else if (hasWaterway) {
+    modeLabel = 'WATERWAY + ROAD';
+    primaryMode = 'waterway';
+  }
 
   const path = [startId, ...pathEdges.map((e) => e.to)].map((id) => nodeMap[id]);
 
   return {
     path,
-    edges: pathEdges.map((e) => ({
-      from: nodeMap[e.from],
-      to: nodeMap[e.to],
-      km: e.km,
-      road: e.road,
-      mode: e.mode,
-      weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
-      disruptionMultiplier: e.disruptionMultiplier || 1,
-      condition: e.weatherSeverity > 0.6 || e.disruptionMultiplier >= 4.0 ? 'disrupted'
-        : (e.weatherSeverity > 0.3 || e.disruptionMultiplier >= 1.8) ? 'caution' : 'clear',
-    })),
+    edges: segments,
+    segments,
+    transfers,
+    mode: primaryMode,
+    modeLabel,
     totalKm: Number(totalKm.toFixed(1)),
+    totalDistance: Number(totalKm.toFixed(1)),
     totalWeight: Number(totalWeight.toFixed(1)),
     avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
     etaMinutes,
+    totalTime: etaMinutes,
     safetyIndex,
   };
 }

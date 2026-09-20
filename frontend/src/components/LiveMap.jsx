@@ -23,7 +23,7 @@ function MapCenterer() {
   return null;
 }
 
-export default function LiveMap({ height = 440, focusRouteEdges = null }) {
+export default function LiveMap({ height = 440, focusRouteEdges = null, activeRoute = null }) {
   const { t } = useTranslation();
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [edges, setEdges] = useState(LOCAL_EDGES);
@@ -42,7 +42,6 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
       if (nodeRes.nodes) setNodes(nodeRes.nodes);
       if (edgeRes.edges) setEdges(edgeRes.edges);
       if (repRes.reports) setIncidents(repRes.reports);
-      setLastFetched(new Date());
     } catch (_) {
       // Offline fallback: use local nodes and edges
       setNodes(LOCAL_NODES);
@@ -260,7 +259,7 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
                     <Marker 
                       key={n.id} 
                       position={[n.lat, n.lng]}
-                      icon={divIcon({
+                      icon={new L.DivIcon({
                         html: '<div style="font-size:16px; background:#fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 4px rgba(0,0,0,0.3); border: 2px solid #9333ea;">✈️</div>',
                         className: 'custom-airport-icon',
                         iconSize: [24, 24],
@@ -278,6 +277,37 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
                 })}
               </LayerGroup>
             </LayersControl.Overlay>
+
+            {/* MULTIMODAL TRANSFER HUBS LAYER */}
+            {activeRoute && activeRoute.transfers && activeRoute.transfers.length > 0 && (
+              <LayersControl.Overlay checked name="🔄 Multimodal Transfers">
+                <LayerGroup>
+                  {activeRoute.transfers.map((tr, idx) => {
+                    const trNode = tr.node || nodes.find(n => n.id === tr.at || n.id === tr.id);
+                    if (!trNode || !trNode.lat) return null;
+                    return (
+                      <Marker
+                        key={`transfer-${idx}-${trNode.id}`}
+                        position={[trNode.lat, trNode.lng]}
+                        icon={new L.DivIcon({
+                          html: `<div style="font-size:16px; background:#fff; border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.35); border: 2.5px solid #0f766e;">🔄</div>`,
+                          className: 'custom-transfer-icon',
+                          iconSize: [28, 28],
+                          iconAnchor: [14, 14]
+                        })}
+                      >
+                        <Tooltip sticky permanent>
+                          <div style={{ fontSize: 11, fontWeight: 700 }}>
+                            <b style={{ color: '#0f766e' }}>Transfer Hub: {trNode.name}</b>
+                            <div style={{ color: '#4b5563' }}>{tr.fromMode?.toUpperCase()} → {tr.toMode?.toUpperCase()}</div>
+                          </div>
+                        </Tooltip>
+                      </Marker>
+                    );
+                  })}
+                </LayerGroup>
+              </LayersControl.Overlay>
+            )}
           </LayersControl>
         </MapContainer>
       ) : (

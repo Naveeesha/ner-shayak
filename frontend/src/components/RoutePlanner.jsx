@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import LiveMap from './LiveMap';
-import { NODES as LOCAL_NODES, computeSafetyRoute } from '../services/routeCalculator';
+import { NODES as LOCAL_NODES, computeSafetyRoute, scoreAndRecommendRoutes } from '../services/routeCalculator';
 import { useTranslation } from '../hooks/useTranslation';
 
 export default function RoutePlanner({ notify }) {
@@ -16,6 +16,7 @@ export default function RoutePlanner({ notify }) {
   const [emergencyMode, setEmergencyMode] = useState(false);
   
   const [compareResult, setCompareResult] = useState(null);
+  const [selectedMode, setSelectedMode] = useState(null);
   const [incidents, setIncidents] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -56,6 +57,7 @@ export default function RoutePlanner({ notify }) {
         emergencyMode
       });
       setCompareResult(res);
+      setSelectedMode(res.recommendation.mode);
       notify && notify(`Risk-weighted routing complete: Recommended ${res.recommendation.mode.toUpperCase()}`);
     } catch (_) {
       // Client-side fallback computation
@@ -64,36 +66,40 @@ export default function RoutePlanner({ notify }) {
       const waterway = computeSafetyRoute(origin, destination, 1, 'waterway');
       const air = computeSafetyRoute(origin, destination, 1, 'air');
       const fallbackRoutes = { road, railway, waterway, air };
-      const available = Object.keys(fallbackRoutes).filter((k) => fallbackRoutes[k] !== null);
+      
+      const scoring = scoreAndRecommendRoutes(fallbackRoutes, {
+        cargoType,
+        weight: cargoWeight || 100,
+        priority,
+        emergencyMode
+      });
 
-      if (available.length === 0) {
+      if (!scoring) {
         setError('No viable safe route found between these locations.');
         setCompareResult(null);
       } else {
-        let recMode = 'road';
-        if (emergencyMode && air) recMode = 'air';
-        else if (cargoType === 'Heavy Cargo' && (waterway || railway)) recMode = waterway ? 'waterway' : 'railway';
-        else if (priority === 'High' && air) recMode = 'air';
-        else if (railway && railway.safetyIndex > 85) recMode = 'railway';
-        else recMode = road ? 'road' : available[0];
-
         setCompareResult({
           routes: fallbackRoutes,
           recommendation: {
-            mode: recMode,
-            reason: 'Risk-weighted route computed using offline multimodal graph heuristic.',
-            route: fallbackRoutes[recMode]
+            mode: scoring.recommendedMode,
+            reason: scoring.recommendationReason,
+            score: scoring.score,
+            route: scoring.route
           }
         });
-        notify && notify(`Offline multimodal route calculated: Recommended ${recMode.toUpperCase()}`);
+        setSelectedMode(scoring.recommendedMode);
+        notify && notify(`Offline multimodal route calculated: Recommended ${scoring.recommendedMode.toUpperCase()}`);
       }
     } finally {
       setBusy(false);
     }
   };
 
+  // Determine active displayed route
+  const activeRoute = (compareResult?.routes && selectedMode && compareResult.routes[selectedMode]) || compareResult?.recommendation?.route;
+
   // Find incidents along origin / destination / route corridors
-  const routeIncidents = (compareResult?.recommendation?.route?.edges || []).flatMap(edge => {
+  const routeIncidents = (activeRoute?.edges || []).flatMap(edge => {
     return incidents.filter(inc => {
       if (inc.status === 'resolved') return false;
       const matchNode = inc.nodeId === edge.from.id || inc.nodeId === edge.to.id;
@@ -156,7 +162,7 @@ export default function RoutePlanner({ notify }) {
 
       {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700 }}>{error}</p>}
 
-      {compareResult && compareResult.recommendation && (
+      {compareResult && compareResult.recommendation && activeRoute && (
         <div style={{ display: 'grid', gap: 18 }}>
           
           {/* Recommendation Banner with Incident-Aware Routing terminology */}
@@ -173,9 +179,14 @@ export default function RoutePlanner({ notify }) {
                   </span>
                 </div>
               </div>
-              <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.06)', padding: '3px 8px', borderRadius: 6 }}>
-                Dijkstra Graph Safety Index: {compareResult.recommendation.route.safetyIndex}%
-              </span>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.06)', padding: '3px 8px', borderRadius: 6 }}>
+                  Score: {compareResult.recommendation.score || compareResult.recommendation.route.score || 85}/100
+                </span>
+                <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.06)', padding: '3px 8px', borderRadius: 6 }}>
+                  Dijkstra Safety Index: {activeRoute.safetyIndex}%
+                </span>
+              </div>
             </div>
             <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, opacity: 0.95 }}>
               {compareResult.recommendation.reason}
@@ -201,32 +212,108 @@ export default function RoutePlanner({ notify }) {
           )}
 
           {/* Map display */}
-          <LiveMap height={360} focusRouteEdges={compareResult.recommendation.route.edges} />
+          <LiveMap height={360} focusRouteEdges={activeRoute.edges} activeRoute={activeRoute} />
 
           {/* Multimodal Comparison Cards */}
-          <h4 style={{ fontSize: 13, color: '#374151', margin: '6px 0 0 0', fontWeight: 800 }}>
-            {t('route.availableOptions') || 'Available Multimodal Options (Risk-Weighted)'}
-          </h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <ModeCard mode="road" title={t('map.road') || "ROAD"} icon="🚚" route={compareResult.routes.road} isRecommended={compareResult.recommendation.mode === 'road'} t={t} />
-            <ModeCard mode="railway" title={t('map.rail') || "RAIL + ROAD"} icon="🚂" route={compareResult.routes.railway} isRecommended={compareResult.recommendation.mode === 'railway'} t={t} />
-            <ModeCard mode="waterway" title={t('map.water') || "WATERWAY + ROAD"} icon="🚢" route={compareResult.routes.waterway} isRecommended={compareResult.recommendation.mode === 'waterway'} t={t} />
-            <ModeCard mode="air" title={t('map.air') || "AIR + ROAD"} icon="✈️" route={compareResult.routes.air} isRecommended={compareResult.recommendation.mode === 'air'} t={t} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 0 0' }}>
+            <h4 style={{ fontSize: 13, color: '#374151', margin: 0, fontWeight: 800 }}>
+              {t('route.availableOptions') || 'Available Multimodal Options (Risk-Weighted)'}
+            </h4>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>Click any card to inspect path & segments</span>
           </div>
 
-          {/* Route Segments for Recommended */}
-          <div style={{ marginTop: 10 }}>
-            <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>
-              {t('route.recommendedSegments') || 'RECOMMENDED ROUTE SEGMENTS & HAZARD STATUS'}
-            </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <ModeCard
+              mode="road"
+              title={t('map.road') || "ROAD"}
+              icon="🚚"
+              route={compareResult.routes.road}
+              isRecommended={compareResult.recommendation.mode === 'road'}
+              isSelected={selectedMode === 'road'}
+              onSelect={() => setSelectedMode('road')}
+              t={t}
+            />
+            <ModeCard
+              mode="railway"
+              title={t('map.rail') || "RAIL + ROAD"}
+              icon="🚂"
+              route={compareResult.routes.railway}
+              isRecommended={compareResult.recommendation.mode === 'railway'}
+              isSelected={selectedMode === 'railway'}
+              onSelect={() => setSelectedMode('railway')}
+              t={t}
+            />
+            <ModeCard
+              mode="waterway"
+              title={t('map.water') || "WATERWAY + ROAD"}
+              icon="🚢"
+              route={compareResult.routes.waterway}
+              isRecommended={compareResult.recommendation.mode === 'waterway'}
+              isSelected={selectedMode === 'waterway'}
+              onSelect={() => setSelectedMode('waterway')}
+              t={t}
+            />
+            <ModeCard
+              mode="air"
+              title={t('map.air') || "AIR + ROAD"}
+              icon="✈️"
+              route={compareResult.routes.air}
+              isRecommended={compareResult.recommendation.mode === 'air'}
+              isSelected={selectedMode === 'air'}
+              onSelect={() => setSelectedMode('air')}
+              t={t}
+            />
+          </div>
+
+          {/* Multimodal Transfer Points (if applicable) */}
+          {activeRoute.transfers && activeRoute.transfers.length > 0 && (
+            <div style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#334155', marginBottom: 6 }}>
+                🔄 Multimodal Transfer Nodes ({activeRoute.transfers.length})
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {activeRoute.transfers.map((tr, idx) => (
+                  <div key={idx} style={{ fontSize: 11, background: '#ffffff', border: '1px solid #cbd5e1', padding: '4px 10px', borderRadius: 6, color: '#1e293b' }}>
+                    <b>{tr.node?.name || tr.name}</b>: {tr.fromMode.toUpperCase()} → {tr.toMode.toUpperCase()}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Route Segments for Selected Route */}
+          <div style={{ marginTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h4 style={{ fontSize: 12, color: '#39735f', margin: 0, fontWeight: 800 }}>
+                {selectedMode === compareResult.recommendation.mode 
+                  ? (t('route.recommendedSegments') || 'RECOMMENDED ROUTE SEGMENTS & HAZARD STATUS')
+                  : `ROUTE SEGMENTS · ${(activeRoute.modeLabel || selectedMode).toUpperCase()}`}
+              </h4>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+                {(activeRoute.segments || activeRoute.edges || []).length} Corridor Segments
+              </span>
+            </div>
+
             <div style={{ display: 'grid', gap: 6 }}>
-              {compareResult.recommendation.route.edges.map((e, i) => (
+              {(activeRoute.segments || activeRoute.edges || []).map((e, i) => (
                 <div key={i} style={segmentStyle}>
-                  <span style={{ fontWeight: 700 }}>{t(`enum.${e.from.id}`) || e.from.name} → {t(`enum.${e.to.id}`) || e.to.name}</span>
-                  <span style={{ color: '#7c8f87' }}>[{e.mode.toUpperCase()}] {e.road} · {e.km} km</span>
-                  <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
-                    {e.condition === 'clear' ? `🟢 Clear & Safe` : e.condition === 'caution' ? `⚠️ Caution` : `🔴 Disrupted`}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={modeBadgeStyle(e.mode)}>[{(e.mode || 'road').toUpperCase()}]</span>
+                    <span style={{ fontWeight: 700 }}>
+                      {t(`enum.${e.from.id}`) || e.from.name} → {t(`enum.${e.to.id}`) || e.to.name}
+                    </span>
+                  </div>
+                  <span style={{ color: '#64748b' }}>
+                    {e.corridor || e.road} · {e.distance || e.km} km {e.time ? `· ${formatMins(e.time)}` : ''}
                   </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#475569' }}>
+                      {e.safetyIndex || 95}% Safe
+                    </span>
+                    <span style={{ color: conditionColor(e.condition || e.status), fontWeight: 800, textTransform: 'capitalize' }}>
+                      {e.condition === 'clear' ? `🟢 Clear & Safe` : e.condition === 'caution' ? `⚠️ Caution` : `🔴 Disrupted`}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -237,7 +324,7 @@ export default function RoutePlanner({ notify }) {
   );
 }
 
-function ModeCard({ title, icon, route, isRecommended, t }) {
+function ModeCard({ mode, title, icon, route, isRecommended, isSelected, onSelect, t }) {
   if (!route) {
     return (
       <div style={{ ...modeCardBase, opacity: 0.5, background: '#f3f4f6' }}>
@@ -250,20 +337,46 @@ function ModeCard({ title, icon, route, isRecommended, t }) {
     );
   }
 
-  const borderCol = isRecommended ? '#10b981' : '#e5e7eb';
-  const bgCol = isRecommended ? '#ecfdf5' : '#ffffff';
+  const borderCol = isSelected ? '#0f766e' : (isRecommended ? '#10b981' : '#e5e7eb');
+  const bgCol = isSelected ? '#f0fdfa' : (isRecommended ? '#ecfdf5' : '#ffffff');
 
   return (
-    <div style={{ ...modeCardBase, border: `2px solid ${borderCol}`, background: bgCol, position: 'relative' }}>
-      {isRecommended && (
-        <div style={{ position: 'absolute', top: -10, right: 10, background: '#10b981', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>
-          {t('route.recommended') || 'RECOMMENDED'}
-        </div>
-      )}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-        <span style={{ fontSize: 16 }}>{icon}</span>
-        <b style={{ fontSize: 13, color: '#1f2937' }}>{title}</b>
+    <div 
+      onClick={onSelect}
+      style={{ 
+        ...modeCardBase, 
+        border: `2px solid ${borderCol}`, 
+        background: bgCol, 
+        position: 'relative',
+        cursor: 'pointer',
+        boxShadow: isSelected ? '0 0 0 2px rgba(15,118,110,0.2)' : '0 1px 3px rgba(0,0,0,0.05)'
+      }}
+    >
+      <div style={{ position: 'absolute', top: -10, right: 10, display: 'flex', gap: 4 }}>
+        {isRecommended && (
+          <div style={{ background: '#10b981', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>
+            {t('route.recommended') || 'RECOMMENDED'}
+          </div>
+        )}
+        {isSelected && !isRecommended && (
+          <div style={{ background: '#0f766e', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>
+            VIEWING
+          </div>
+        )}
       </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 16 }}>{icon}</span>
+          <b style={{ fontSize: 13, color: '#1f2937' }}>{title}</b>
+        </div>
+        {route.score && (
+          <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.05)', padding: '2px 6px', borderRadius: 6, color: '#374151' }}>
+            Score: {route.score}
+          </span>
+        )}
+      </div>
+
       <div style={{ display: 'grid', gap: 6 }}>
         <div style={cardRow}><span style={cardLabel}>{t('route.time') || 'Time'}:</span> <span style={{ fontWeight: 800, color: '#111827' }}>{formatMins(route.etaMinutes)}</span></div>
         <div style={cardRow}><span style={cardLabel}>{t('route.distance') || 'Distance'}:</span> <span style={{ fontWeight: 700, color: '#4b5563' }}>{route.totalKm} km</span></div>
@@ -307,3 +420,20 @@ const modeCardBase = {
 
 const cardRow = { display: 'flex', justifyContent: 'space-between', fontSize: 12 };
 const cardLabel = { color: '#6b7280', fontWeight: 600 };
+
+const modeBadgeStyle = (mode) => {
+  const map = {
+    road: { background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' },
+    railway: { background: '#f1f5f9', color: '#334155', border: '1px solid #cbd5e1' },
+    waterway: { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' },
+    air: { background: '#f3e8ff', color: '#7e22ce', border: '1px solid #e9d5ff' },
+  };
+  const style = map[mode] || map.road;
+  return {
+    fontSize: 10,
+    fontWeight: 800,
+    padding: '2px 6px',
+    borderRadius: 4,
+    ...style
+  };
+};

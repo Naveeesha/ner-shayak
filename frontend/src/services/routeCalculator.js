@@ -197,17 +197,44 @@ export function computeSafetyRoute(startId, endId, penaltyMultiplier = 1, modeFi
       cur = p.from;
     }
 
-    const totalKm = edges.reduce((s, e) => s + e.km, 0);
-    const modeSpeed = 42;
-    const etaMinutes = Math.round((totalKm / modeSpeed) * 60);
-    const safetyIndex = penaltyMultiplier > 1 ? 98 : 94;
+    let totalMinutes = 0;
+    const segments = edges.map((e) => {
+      const modeSpeed = 42;
+      const segTime = Math.round((e.km / modeSpeed) * 60);
+      totalMinutes += segTime;
+      const segSafety = e.condition === 'caution' ? 82 : 96;
+      return {
+        ...e,
+        distance: e.km,
+        time: segTime,
+        corridor: e.road,
+        risk: e.condition,
+        status: e.condition,
+        safetyIndex: segSafety
+      };
+    });
+
+    const totalKm = segments.reduce((s, e) => s + e.km, 0);
+    const avgSpeedKmh = 42;
+    const etaMinutes = totalMinutes || Math.round((totalKm / avgSpeedKmh) * 60);
+    
+    // Distance-weighted safety aggregation
+    let weightedSum = 0;
+    segments.forEach(s => { weightedSum += s.km * s.safetyIndex; });
+    const safetyIndex = totalKm > 0 ? Math.round(weightedSum / totalKm) : 95;
 
     return {
       path: [nodeMap[startId], ...edges.map((e) => e.to)],
-      edges,
+      edges: segments,
+      segments,
+      transfers: [],
+      mode: 'road',
+      modeLabel: 'ROAD',
       totalKm,
+      totalDistance: totalKm,
       etaMinutes,
-      avgSpeedKmh: modeSpeed,
+      totalTime: etaMinutes,
+      avgSpeedKmh,
       safetyIndex,
     };
   }
@@ -311,26 +338,183 @@ export function computeSafetyRoute(startId, endId, penaltyMultiplier = 1, modeFi
 
   if (!edges.some((e) => e.mode === modeFilter)) return null;
 
-  const totalKm = edges.reduce((s, e) => s + e.km, 0);
   let totalMinutes = 0;
-  edges.forEach((e) => {
+  const segments = edges.map((e) => {
     let speed = 45;
     if (e.mode === 'air') speed = 500;
     else if (e.mode === 'railway') speed = 55;
     else if (e.mode === 'waterway') speed = 24;
+    const segTime = Math.round((e.km / speed) * 60);
     totalMinutes += (e.km / speed) * 60;
+    const segSafety = e.mode === 'air' ? 98 : (e.condition === 'caution' ? 80 : 95);
+    return {
+      ...e,
+      distance: e.km,
+      time: segTime,
+      corridor: e.road,
+      risk: e.condition,
+      status: e.condition,
+      safetyIndex: segSafety
+    };
   });
 
+  const totalKm = segments.reduce((s, e) => s + e.km, 0);
   const etaMinutes = Math.round(totalMinutes);
   const avgSpeedKmh = totalKm > 0 ? Number((totalKm / (etaMinutes / 60)).toFixed(1)) : 0;
-  const safetyIndex = penaltyMultiplier > 1 ? 98 : 95;
+
+  // Distance-weighted safety aggregation
+  let weightedSum = 0;
+  segments.forEach(s => { weightedSum += s.km * s.safetyIndex; });
+  const safetyIndex = totalKm > 0 ? Math.round(weightedSum / totalKm) : 95;
+
+  // Mode transfers
+  const transfers = [];
+  for (let i = 0; i < segments.length - 1; i++) {
+    if (segments[i].mode !== segments[i + 1].mode) {
+      transfers.push({
+        node: segments[i].to,
+        fromMode: segments[i].mode,
+        toMode: segments[i + 1].mode,
+        name: segments[i].to?.name || segments[i].to?.id
+      });
+    }
+  }
+
+  const modeLabel = modeFilter === 'air' ? 'AIR + ROAD' : (modeFilter === 'railway' ? 'RAIL + ROAD' : (modeFilter === 'waterway' ? 'WATERWAY + ROAD' : 'ROAD'));
 
   return {
-    path: [nodeMap[startId], ...edges.map((e) => e.to)],
-    edges,
+    path: [nodeMap[startId], ...segments.map((e) => e.to)],
+    edges: segments,
+    segments,
+    transfers,
+    mode: modeFilter,
+    modeLabel,
     totalKm,
+    totalDistance: totalKm,
     etaMinutes,
+    totalTime: etaMinutes,
     avgSpeedKmh,
     safetyIndex,
+  };
+}
+
+export function scoreAndRecommendRoutes(routes = {}, options = {}) {
+  const {
+    cargoType = 'General Cargo',
+    weight = 100,
+    priority = 'Normal',
+    emergencyMode = false
+  } = options;
+
+  const isEmergency = emergencyMode || priority === 'Emergency' || priority === 'urgent' || priority === 'emergency';
+  const isHighPriority = priority === 'High' || priority === 'high';
+  const isHeavy = cargoType === 'Heavy Cargo' || Number(weight) > 5000;
+  const isPerishableOrUrgent = cargoType === 'Perishable' || 
+                               cargoType === 'Pharmaceutical / Medicine' || 
+                               cargoType === 'Emergency Supplies';
+  const isHighValue = cargoType === 'High Value';
+
+  const availableModes = Object.keys(routes).filter((m) => routes[m] !== null && routes[m] !== undefined);
+  if (availableModes.length === 0) return null;
+
+  const times = availableModes.map((m) => routes[m].etaMinutes || 0);
+  const distances = availableModes.map((m) => routes[m].totalKm || 0);
+
+  const minTime = Math.min(...times);
+  const maxTime = Math.max(...times);
+  const minDistance = Math.min(...distances);
+  const maxDistance = Math.max(...distances);
+
+  let wTime = 0.35;
+  let wDist = 0.20;
+  let wRisk = 0.45;
+
+  if (isEmergency) {
+    wTime = 0.65;
+    wDist = 0.05;
+    wRisk = 0.30;
+  } else if (isHighPriority) {
+    wTime = 0.50;
+    wDist = 0.15;
+    wRisk = 0.35;
+  } else if (isHighValue) {
+    wTime = 0.30;
+    wDist = 0.15;
+    wRisk = 0.55;
+  }
+
+  const scoredCandidates = availableModes.map((mode) => {
+    const r = routes[mode];
+    const time = r.etaMinutes || 0;
+    const distance = r.totalKm || 0;
+    const safety = r.safetyIndex !== undefined ? r.safetyIndex : 90;
+    const risk = Math.max(0, 100 - safety);
+
+    const normTime = maxTime > minTime ? (time - minTime) / (maxTime - minTime) : 0;
+    const normDist = maxDistance > minDistance ? (distance - minDistance) / (maxDistance - minDistance) : 0;
+    const normRisk = risk / 100;
+
+    let suitabilityAdjustment = 0;
+    const transferCount = (r.transfers || []).length;
+    suitabilityAdjustment += transferCount * 0.03;
+
+    if (isHeavy) {
+      if (mode === 'air') suitabilityAdjustment += 0.50;
+      if (mode === 'waterway') suitabilityAdjustment -= 0.18;
+      if (mode === 'railway') suitabilityAdjustment -= 0.12;
+    }
+
+    if (isPerishableOrUrgent) {
+      if (mode === 'air') suitabilityAdjustment -= 0.18;
+      if (mode === 'waterway') suitabilityAdjustment += 0.30;
+    }
+
+    if (isHighValue) {
+      if (mode === 'air') suitabilityAdjustment -= 0.10;
+    }
+
+    const cost = (wTime * normTime) + (wDist * normDist) + (wRisk * normRisk) + suitabilityAdjustment;
+    const score = Math.round(Math.max(10, Math.min(99, (1 - cost) * 100)));
+
+    return {
+      mode,
+      cost,
+      score,
+      route: r,
+    };
+  });
+
+  scoredCandidates.sort((a, b) => a.cost - b.cost);
+  const best = scoredCandidates[0];
+  const bestMode = best.mode;
+  const bestRoute = routes[bestMode];
+
+  let reason = '';
+  if (isEmergency) {
+    reason = `Emergency priority selected ${bestMode.toUpperCase()} (${bestRoute.totalKm} km, ${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m) to minimize transit delay with ${bestRoute.safetyIndex}% corridor safety.`;
+  } else if (isHeavy && (bestMode === 'railway' || bestMode === 'waterway')) {
+    reason = `Heavy freight profile prioritized ${bestMode === 'railway' ? 'NFR Rail' : 'IWAI Waterway'} for high-capacity bulk payload, lower logistics cost, and ${bestRoute.safetyIndex}% corridor integrity.`;
+  } else if (bestMode === 'air') {
+    reason = `Air + Road multimodal corridor delivers optimal efficiency (${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m vs road transit) with high safety index of ${bestRoute.safetyIndex}%.`;
+  } else if (bestMode === 'railway') {
+    reason = `NFR Railway freight corridor selected for superior balance of transport safety (${bestRoute.safetyIndex}%), low disruption vulnerability, and reliable transit schedule.`;
+  } else if (bestMode === 'waterway') {
+    reason = `Inland Waterway corridor (NW-2/16) selected for stable river freight movement with ${bestRoute.safetyIndex}% route safety index.`;
+  } else {
+    reason = `Direct highway corridor selected as the most viable and direct routing (${bestRoute.totalKm} km) with ${bestRoute.safetyIndex}% corridor safety.`;
+  }
+
+  scoredCandidates.forEach((c) => {
+    if (routes[c.mode]) {
+      routes[c.mode].score = c.score;
+    }
+  });
+
+  return {
+    recommendedMode: bestMode,
+    recommendationReason: reason,
+    score: best.score,
+    route: bestRoute,
+    rankings: scoredCandidates,
   };
 }
