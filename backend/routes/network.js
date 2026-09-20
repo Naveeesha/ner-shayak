@@ -1,9 +1,9 @@
 const express = require('express');
-const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { NODES, EDGES } = require('../data/nerNetwork');
 const { findRoute, findAlternateRoutes } = require('../utils/dijkstra');
 const { fetchNodeWeather } = require('./weather');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
@@ -22,12 +22,19 @@ router.get('/edges', requireAuth, async (req, res) => {
         weatherByNode[n.id] = w.severity;
       } catch (_) { weatherByNode[n.id] = 0; }
     }));
-    const disruptions = getActiveDisruptions();
+    const disruptions = await supabaseService.getActiveDisruptions();
     const nodeMap = Object.fromEntries(NODES.map((n) => [n.id, n]));
 
     const edges = EDGES.map((e) => {
-      const relevant = disruptions.filter((d) =>
-        (d.fromNode === e.from && d.toNode === e.to) || (d.fromNode === e.to && d.toNode === e.from) || d.road === e.road);
+      const relevant = disruptions.filter((d) => {
+        if (d.fromNode && d.toNode) {
+          return (d.fromNode === e.from && d.toNode === e.to) || 
+                 (d.fromNode === e.to && d.toNode === e.from);
+        }
+        if (d.fromNode) return d.fromNode === e.from || d.fromNode === e.to;
+        if (d.road) return d.road === e.road;
+        return false;
+      });
       const blocked = relevant.some((d) => d.severity === 'blocked');
       const worstSeverity = relevant.reduce((max, d) => {
         const rank = { minor: 1, moderate: 2, severe: 3, blocked: 4 };
@@ -55,19 +62,6 @@ router.get('/edges', requireAuth, async (req, res) => {
   }
 });
 
-function getActiveDisruptions() {
-  // Derive routing disruptions from open field reports (road_block, landslide, flood, etc.)
-  const reports = db.prepare(`SELECT * FROM field_reports WHERE status = 'open' AND category IN ('road_block','landslide','flood','bridge_damage','accident')`).all();
-  return reports.map((r) => ({
-    fromNode: r.fromNode,
-    toNode: r.toNode,
-    road: r.road,
-    severity: r.category === 'bridge_damage' || r.severity === 'critical' ? 'blocked'
-      : r.severity === 'high' ? 'severe'
-      : r.severity === 'medium' ? 'moderate' : 'minor',
-  }));
-}
-
 // POST /api/network/route  { originId, destinationId, alternates?, mode? }
 router.post('/route', requireAuth, async (req, res) => {
   const { originId, destinationId, alternates = true, mode = 'all' } = req.body || {};
@@ -81,7 +75,7 @@ router.post('/route', requireAuth, async (req, res) => {
         weatherSeverityByNode[n.id] = w.severity;
       } catch (_) { weatherSeverityByNode[n.id] = 0; }
     }));
-    const disruptions = getActiveDisruptions();
+    const disruptions = await supabaseService.getActiveDisruptions();
     const context = { weatherSeverityByNode, disruptions, mode };
 
     const best = findRoute(originId, destinationId, context);
@@ -111,7 +105,7 @@ router.post('/compare', requireAuth, async (req, res) => {
         weatherSeverityByNode[n.id] = w.severity;
       } catch (_) { weatherSeverityByNode[n.id] = 0; }
     }));
-    const disruptions = getActiveDisruptions();
+    const disruptions = await supabaseService.getActiveDisruptions();
     
     const computeForMode = (modeName) => {
       const route = findRoute(originId, destinationId, { weatherSeverityByNode, disruptions, mode: modeName });
@@ -135,7 +129,7 @@ router.post('/compare', requireAuth, async (req, res) => {
     let recommendedMode = 'road';
     let recommendationReason = 'Road provides a balanced route for this delivery.';
 
-    const isEmergency = emergencyMode || priority === 'Emergency';
+    const isEmergency = emergencyMode || priority === 'Emergency' || priority === 'urgent' || priority === 'emergency';
     const isHeavy = cargoType === 'Heavy Cargo' || Number(weight) > 5000;
 
     // Filter to available routes
@@ -173,7 +167,7 @@ router.post('/compare', requireAuth, async (req, res) => {
           recommendedMode = 'road';
           recommendationReason = 'Road transport is recommended as rail/waterway links are unavailable for this route.';
         }
-      } else if (priority === 'High' && routes.air && Number(weight) < 1000) {
+      } else if ((priority === 'High' || priority === 'high' || priority === 'urgent') && routes.air && Number(weight) < 1000) {
           recommendedMode = 'air';
           recommendationReason = 'High priority and low weight makes air transport the optimal choice for rapid delivery.';
       } else {

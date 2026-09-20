@@ -1,10 +1,10 @@
 const express = require('express');
 const fetch = require('node-fetch');
-const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { NODES, EDGES } = require('../data/nerNetwork');
+const { NODES } = require('../data/nerNetwork');
 const { findRoute } = require('../utils/dijkstra');
 const { fetchNodeWeather } = require('./weather');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
@@ -16,7 +16,7 @@ const router = express.Router();
 async function generateLocalAIResponse(query, user, context = {}) {
   const q = (query || '').toLowerCase().trim();
 
-  // 0. Arithmetic / Math calculation check (e.g., 2+2, 5 * 10, 100 / 4)
+  // 0. Arithmetic / Math calculation check
   const cleanMathExpr = q.replace(/ /g, '');
   const mathMatch = cleanMathExpr.match(/^(\d+(?:\.\d+)?)([\+\-\*\/])(\d+(?:\.\d+)?)$/);
   if (mathMatch) {
@@ -58,8 +58,9 @@ async function generateLocalAIResponse(query, user, context = {}) {
       await Promise.all(NODES.map(async (n) => {
         try { weatherSeverityByNode[n.id] = (await fetchNodeWeather(n)).severity; } catch (_) { weatherSeverityByNode[n.id] = 0; }
       }));
+      const disruptions = await supabaseService.getActiveDisruptions();
 
-      const route = findRoute(origin.id, destination.id, { weatherSeverityByNode });
+      const route = findRoute(origin.id, destination.id, { weatherSeverityByNode, disruptions });
       if (route) {
         const hours = Math.floor(route.etaMinutes / 60);
         const mins = route.etaMinutes % 60;
@@ -71,6 +72,7 @@ async function generateLocalAIResponse(query, user, context = {}) {
           answer: `**Recommended Route from ${origin.name} to ${destination.name}:**\n\n` +
             `• **Distance:** ${route.totalKm} km\n` +
             `• **Estimated Travel Time:** ${timeStr} (Avg Speed: ${route.avgSpeedKmh} km/h)\n` +
+            `• **Safety Index:** ${route.safetyIndex}%\n` +
             `• **Route Segments:** ${segmentSummary}\n\n` +
             `*Safety Note:* Weather conditions and active field reports were factored into this calculation. Drive carefully!`,
           contextUsed: { type: 'route_calculation', origin: origin.name, destination: destination.name, distanceKm: route.totalKm },
@@ -89,9 +91,9 @@ async function generateLocalAIResponse(query, user, context = {}) {
       return {
         answer: `**Live Weather Intelligence for ${matchedNode.name} (${matchedNode.state}):**\n\n` +
           `• **Condition:** ${weather.label}\n` +
-          `• **Temperature:** ${weather.tempC}°C\n` +
-          `• **Precipitation:** ${weather.rainMm} mm\n` +
-          `• **Wind Speed:** ${weather.windKmh} km/h\n` +
+          `• **Temperature:** ${weather.temperature || 24}°C\n` +
+          `• **Precipitation:** ${weather.precipitation || 0} mm\n` +
+          `• **Wind Speed:** ${weather.windspeed || 12} km/h\n` +
           `• **Risk Severity Level:** ${(weather.severity * 100).toFixed(0)}%\n\n` +
           (weather.severity > 0.4 ? `⚠️ *Caution:* High moisture or weather disruption detected near ${matchedNode.name}. Allow extra travel time.` : `✅ Travel conditions near ${matchedNode.name} are currently favorable.`),
         contextUsed: { type: 'weather', node: matchedNode.name, weather },
@@ -101,12 +103,13 @@ async function generateLocalAIResponse(query, user, context = {}) {
 
   // 3. Landslide / Disruption / Field Reports query
   if (q.includes('disruption') || q.includes('landslide') || q.includes('block') || q.includes('road') || q.includes('hazard') || q.includes('report') || q.includes('incident')) {
-    const reports = db.prepare('SELECT * FROM field_reports WHERE status = "open" ORDER BY createdAt DESC LIMIT 5').all();
-    if (reports.length > 0) {
-      const reportList = reports.map((r) => `• **[${r.severity.toUpperCase()}] ${r.title}**: ${r.description || 'No extra details'} (Category: ${r.category.replace('_', ' ')})`).join('\n');
+    const allIncidents = await supabaseService.getIncidents(10);
+    const openReports = allIncidents.filter((r) => r.status !== 'resolved').slice(0, 5);
+    if (openReports.length > 0) {
+      const reportList = openReports.map((r) => `• **[${(r.severity || 'MODERATE').toUpperCase()}] ${r.title}**: ${r.description || 'No extra details'} (Category: ${(r.category || 'other').replace('_', ' ')})`).join('\n');
       return {
         answer: `**Active Road Disruption Reports in North East Region:**\n\n${reportList}\n\n*Tip:* Field officers can submit live geo-tagged incident updates directly from their workspace.`,
-        contextUsed: { type: 'field_reports', count: reports.length },
+        contextUsed: { type: 'field_reports', count: openReports.length },
       };
     } else {
       return {
@@ -118,7 +121,7 @@ async function generateLocalAIResponse(query, user, context = {}) {
 
   // 4. Alerts query
   if (q.includes('alert') || q.includes('warning') || q.includes('notice') || q.includes('broadcasting')) {
-    const alerts = db.prepare('SELECT * FROM alerts ORDER BY createdAt DESC LIMIT 5').all();
+    const alerts = await supabaseService.getAlerts(5);
     if (alerts.length > 0) {
       const alertList = alerts.map((a) => `• **${a.type}** (${a.severity}): ${a.title} - ${a.text}`).join('\n');
       return {
@@ -131,7 +134,7 @@ async function generateLocalAIResponse(query, user, context = {}) {
   // 5. User / Workspace query
   if (q.includes('my') || q.includes('shipment') || q.includes('vehicle') || q.includes('profile') || q.includes('workspace') || q.includes('role')) {
     if (user.role === 'logistics') {
-      const shipments = db.prepare('SELECT * FROM shipments WHERE createdBy = ? ORDER BY createdAt DESC LIMIT 5').all(user.id);
+      const shipments = await supabaseService.getShipments(user.id, 'logistics');
       return {
         answer: `**Logistics Workspace Summary for ${user.name}:**\n\n` +
           `• **Role:** Logistics Operator (${user.organisation || 'NER Freight'})\n` +
@@ -140,7 +143,7 @@ async function generateLocalAIResponse(query, user, context = {}) {
         contextUsed: { type: 'user_logistics', shipmentCount: shipments.length },
       };
     } else if (user.role === 'driver') {
-      const vehicles = db.prepare('SELECT * FROM vehicles WHERE ownerId = ?').all(user.id);
+      const vehicles = await supabaseService.getVehicles(user.id);
       return {
         answer: `**Driver Workspace Summary for ${user.name}:**\n\n` +
           `• **Vehicle Number:** ${user.vehicleNumber || 'Registered Driver'}\n` +
@@ -150,25 +153,26 @@ async function generateLocalAIResponse(query, user, context = {}) {
         contextUsed: { type: 'user_driver', vehicleCount: vehicles.length },
       };
     } else if (user.role === 'field') {
-      const myReports = db.prepare('SELECT COUNT(*) c FROM field_reports WHERE userId = ?').get(user.id).c;
+      const myReports = await supabaseService.getIncidentsByUserId(user.id);
       return {
         answer: `**Field Officer Workspace Summary for ${user.name}:**\n\n` +
           `• **Unit / Org:** ${user.organisation || 'PWD Field Unit'}\n` +
           `• **District Posting:** ${user.district || 'Assam'}\n` +
-          `• **Reports Submitted by You:** ${myReports}\n\n` +
+          `• **Reports Submitted by You:** ${myReports.length}\n\n` +
           `You can file new geo-tagged incident reports with photo attachments even when offline.`,
-        contextUsed: { type: 'user_field', reportCount: myReports },
+        contextUsed: { type: 'user_field', reportCount: myReports.length },
       };
     } else if (user.role === 'official') {
-      const totalUsers = db.prepare('SELECT COUNT(*) c FROM users').get().c;
-      const totalReports = db.prepare('SELECT COUNT(*) c FROM field_reports WHERE status = "open"').get().c;
+      const { total } = await supabaseService.listUsers();
+      const allIncidents = await supabaseService.getIncidents();
+      const totalReports = allIncidents.filter((r) => r.status !== 'resolved').length;
       return {
         answer: `**Official Briefing Room Summary for ${user.name}:**\n\n` +
           `• **Department:** ${user.department || 'DoNER / Regional Office'}\n` +
-          `• **Registered Personnel Across Region:** ${totalUsers}\n` +
+          `• **Registered Personnel Across Region:** ${total}\n` +
           `• **Active Open Hazards:** ${totalReports}\n\n` +
           `You have full access to the District Connectivity Dashboard and Regional Team Directory.`,
-        contextUsed: { type: 'user_official', totalUsers, totalReports },
+        contextUsed: { type: 'user_official', totalUsers: total, totalReports },
       };
     }
   }
@@ -214,8 +218,9 @@ async function handleAskRequest(req, res) {
   // If OpenAPI Key is provided, send request to OpenAI-compatible endpoint
   if (apiKey) {
     try {
-      const activeAlerts = db.prepare('SELECT title, text, severity FROM alerts ORDER BY createdAt DESC LIMIT 5').all();
-      const openReports = db.prepare('SELECT title, category, severity, road FROM field_reports WHERE status = "open" ORDER BY createdAt DESC LIMIT 5').all();
+      const activeAlerts = await supabaseService.getAlerts(5);
+      const allIncidents = await supabaseService.getIncidents(10);
+      const openReports = allIncidents.filter((r) => r.status !== 'resolved').slice(0, 5);
 
       const systemPrompt = `You are "Ask Sahayak", an AI assistant for the NER-Sahayak platform (North Eastern Region Smart Logistics & Accessibility Intelligence Platform in India).
 You assist users (${req.user.name}, role: ${req.user.role}, district: ${req.user.district || 'Assam'}) with road navigation, weather hazards, logistics, and emergency response.

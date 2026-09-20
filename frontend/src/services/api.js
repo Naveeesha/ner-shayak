@@ -85,6 +85,7 @@ export const api = {
 
   // Dashboard
   dashboardSummary: () => request('/dashboard/summary'),
+  activityLogs: () => request('/dashboard/activity'),
 
   // Users directory (official role only)
   users: (params = {}) => {

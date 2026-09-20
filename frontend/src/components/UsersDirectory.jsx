@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { NER_REGION_STATES } from '../context/AuthContext';
 import { DRIVER_ROSTER } from '../services/driverService';
-
-const ROLE_LABEL = { driver: 'Driver', field: 'Field officer', logistics: 'Logistics operator', official: 'Government Official' };
+import { useTranslation } from '../hooks/useTranslation';
 
 export default function UsersDirectory() {
+  const { t } = useTranslation();
+  const ROLE_LABEL = { driver: t('role.driver') || 'Driver', field: t('role.field') || 'Field officer', logistics: t('role.logistics') || 'Logistics operator', official: t('role.official') || 'Government Official' };
+
   const [users, setUsers] = useState([]);
   const [byRole, setByRole] = useState({});
   const [role, setRole] = useState('');
@@ -88,7 +90,7 @@ export default function UsersDirectory() {
 
   const handleDeleteUser = async () => {
     if (!selected) return;
-    if (!window.confirm(`Are you sure you want to delete the account for ${selected.name} (${selected.email})?`)) return;
+    if (!window.confirm(t('users.confirmDelete') || `Are you sure you want to delete the account for ${selected.name} (${selected.email})?`)) return;
     setBusy(true);
     try {
       await api.deleteUser(selected.id);
@@ -127,31 +129,41 @@ export default function UsersDirectory() {
           ))}
         </div>
         <button onClick={exportCSV} style={exportBtnStyle}>
-          📥 Export Directory (CSV)
+          📥 {t('users.export') || 'Export Directory (CSV)'}
         </button>
       </div>
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email, organisation, district…" style={{ ...inputStyle, flex: 2, minWidth: 220 }}/>
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('users.searchPlaceholder') || "Search name, email, organisation, district…"} style={{ ...inputStyle, flex: 2, minWidth: 220 }}/>
         <select value={role} onChange={(e) => setRole(e.target.value)} style={inputStyle}>
-          <option value="">All roles</option>
+          <option value="">{t('users.allRoles') || 'All roles'}</option>
           {Object.entries(ROLE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
         </select>
         <select value={state} onChange={(e) => setState(e.target.value)} style={inputStyle}>
-          <option value="">All states</option>
+          <option value="">{t('users.allStates') || 'All states'}</option>
           {NER_REGION_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
 
       {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700 }}>{error}</p>}
-      {loading && <p style={{ fontSize: 12, color: '#7c8f87' }}>Loading directory…</p>}
+      {loading && <p style={{ fontSize: 12, color: '#7c8f87' }}>{t('users.loading') || 'Loading directory…'}</p>}
 
       {!loading && (
         <div style={{ overflowX: 'auto' }}>
           <table style={tableStyle}>
             <thead>
               <tr>
-                {['Name', 'Role', 'Email', 'Phone', 'Organisation', 'District / State', 'Language', 'Joined', 'Actions'].map((h) => (
+                {[
+                  t('users.name') || 'Name',
+                  t('users.role') || 'Role',
+                  t('users.email') || 'Email',
+                  t('users.phone') || 'Phone',
+                  t('users.org') || 'Organisation',
+                  t('users.districtState') || 'District / State',
+                  t('users.lang') || 'Language',
+                  t('users.joined') || 'Joined',
+                  t('users.actions') || 'Actions'
+                ].map((h) => (
                   <th key={h} style={thStyle}>{h}</th>
                 ))}
               </tr>
@@ -170,13 +182,13 @@ export default function UsersDirectory() {
                   <td style={tdStyle} onClick={() => openDetail(u)}>{u.language}</td>
                   <td style={tdStyle} onClick={() => openDetail(u)}>{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td style={tdStyle}>
-                    <button onClick={() => openDetail(u)} style={viewBtnStyle}>View All Details</button>
+                    <button onClick={() => openDetail(u)} style={viewBtnStyle}>{t('users.viewAll') || 'View All Details'}</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {users.length === 0 && <p style={{ fontSize: 12, color: '#7c8f87', padding: '14px 0' }}>No accounts match this filter.</p>}
+          {users.length === 0 && <p style={{ fontSize: 12, color: '#7c8f87', padding: '14px 0' }}>{t('users.noMatch') || 'No accounts match this filter.'}</p>}
         </div>
       )}
 
@@ -196,52 +208,52 @@ export default function UsersDirectory() {
             {!editing ? (
               <>
                 <div style={{ display: 'grid', gap: 8, marginTop: 16 }}>
-                  <Detail label="User ID" value={selected.id} mono />
-                  <Detail label="Email" value={selected.email} />
-                  <Detail label="Phone" value={selected.phone || '—'} />
-                  <Detail label="Organisation / unit" value={selected.organisation || '—'} />
-                  <Detail label="State" value={selected.state || '—'} />
-                  <Detail label="District / posting" value={selected.district || '—'} />
-                  {selected.vehicleNumber && <Detail label="Vehicle number" value={selected.vehicleNumber} />}
-                  {selected.hub && <Detail label="Logistics hub" value={selected.hub} />}
-                  {selected.department && <Detail label="Department" value={selected.department} />}
-                  <Detail label="Alert language" value={selected.language} />
-                  <Detail label="Account created" value={new Date(selected.createdAt).toLocaleString()} />
+                  <Detail label={t('users.userId') || 'User ID'} value={selected.id} mono />
+                  <Detail label={t('users.email') || 'Email'} value={selected.email} />
+                  <Detail label={t('users.phone') || 'Phone'} value={selected.phone || '—'} />
+                  <Detail label={t('users.orgUnit') || 'Organisation / unit'} value={selected.organisation || '—'} />
+                  <Detail label={t('users.state') || 'State'} value={selected.state || '—'} />
+                  <Detail label={t('users.districtPosting') || 'District / posting'} value={selected.district || '—'} />
+                  {selected.vehicleNumber && <Detail label={t('tracker.vehicleNumber') || 'Vehicle number'} value={selected.vehicleNumber} />}
+                  {selected.hub && <Detail label={t('users.logisticsHub') || 'Logistics hub'} value={selected.hub} />}
+                  {selected.department && <Detail label={t('users.department') || 'Department'} value={selected.department} />}
+                  <Detail label={t('users.alertLang') || 'Alert language'} value={selected.language} />
+                  <Detail label={t('users.accountCreated') || 'Account created'} value={new Date(selected.createdAt).toLocaleString()} />
                 </div>
 
                 <div style={{ display: 'grid', gap: 8, marginTop: 24, paddingTop: 16, borderTop: '1px solid #edf1ee' }}>
                   <button onClick={() => setEditing(true)} style={editBtnStyle}>
-                    ✏️ Edit User Role & Info
+                    ✏️ {t('users.editInfo') || 'Edit User Role & Info'}
                   </button>
                   <button onClick={handleDeleteUser} disabled={busy} style={deleteBtnStyle}>
-                    🗑️ Delete User Account
+                    🗑️ {t('users.deleteAcc') || 'Delete User Account'}
                   </button>
                 </div>
               </>
             ) : (
               <form onSubmit={handleSaveEdit} style={{ display: 'grid', gap: 12, marginTop: 16 }}>
-                <label style={editLabelStyle}>Role
+                <label style={editLabelStyle}>{t('users.role') || 'Role'}
                   <select value={editForm.role} onChange={(e) => setEditForm((p) => ({ ...p, role: e.target.value }))} style={inputStyle}>
                     {Object.entries(ROLE_LABEL).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                   </select>
                 </label>
-                <label style={editLabelStyle}>Organisation / Unit
+                <label style={editLabelStyle}>{t('users.orgUnit') || 'Organisation / Unit'}
                   <input value={editForm.organisation} onChange={(e) => setEditForm((p) => ({ ...p, organisation: e.target.value }))} style={inputStyle} />
                 </label>
-                <label style={editLabelStyle}>District / Posting
+                <label style={editLabelStyle}>{t('users.districtPosting') || 'District / Posting'}
                   <input value={editForm.district} onChange={(e) => setEditForm((p) => ({ ...p, district: e.target.value }))} style={inputStyle} />
                 </label>
-                <label style={editLabelStyle}>State
+                <label style={editLabelStyle}>{t('users.state') || 'State'}
                   <select value={editForm.state} onChange={(e) => setEditForm((p) => ({ ...p, state: e.target.value }))} style={inputStyle}>
                     {NER_REGION_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </label>
-                <label style={editLabelStyle}>Phone
+                <label style={editLabelStyle}>{t('users.phone') || 'Phone'}
                   <input value={editForm.phone} onChange={(e) => setEditForm((p) => ({ ...p, phone: e.target.value }))} style={inputStyle} />
                 </label>
                 <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                  <button type="submit" disabled={busy} style={saveBtnStyle}>{busy ? 'Saving…' : 'Save Changes'}</button>
-                  <button type="button" onClick={() => setEditing(false)} style={cancelBtnStyle}>Cancel</button>
+                  <button type="submit" disabled={busy} style={saveBtnStyle}>{busy ? (t('common.saving') || 'Saving…') : (t('common.saveChanges') || 'Save Changes')}</button>
+                  <button type="button" onClick={() => setEditing(false)} style={cancelBtnStyle}>{t('common.cancel') || 'Cancel'}</button>
                 </div>
               </form>
             )}

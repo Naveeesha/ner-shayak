@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import LiveMap from './LiveMap';
 import { NODES as LOCAL_NODES, computeSafetyRoute } from '../services/routeCalculator';
+import { useTranslation } from '../hooks/useTranslation';
 
 export default function RoutePlanner({ notify }) {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [origin, setOrigin] = useState('guwahati');
   const [destination, setDestination] = useState('jorhat');
@@ -14,6 +16,7 @@ export default function RoutePlanner({ notify }) {
   const [emergencyMode, setEmergencyMode] = useState(false);
   
   const [compareResult, setCompareResult] = useState(null);
+  const [incidents, setIncidents] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -21,13 +24,17 @@ export default function RoutePlanner({ notify }) {
   const cityNodes = nodes.filter(n => n.type !== 'airport');
 
   useEffect(() => {
-    api.nodes().then((res) => {
-      if (res.nodes && res.nodes.length > 0) {
-        setNodes(res.nodes);
-        const cities = res.nodes.filter(n => n.type !== 'airport');
+    Promise.all([
+      api.nodes(),
+      api.reports().catch(() => ({ reports: [] }))
+    ]).then(([nodeRes, repRes]) => {
+      if (nodeRes.nodes && nodeRes.nodes.length > 0) {
+        setNodes(nodeRes.nodes);
+        const cities = nodeRes.nodes.filter(n => n.type !== 'airport');
         setOrigin(cities.find((n) => n.id === 'guwahati')?.id || cities[0].id);
         setDestination(cities.find((n) => n.id === 'jorhat')?.id || cities[1].id);
       }
+      if (repRes.reports) setIncidents(repRes.reports);
     }).catch(() => {
       setNodes(LOCAL_NODES);
     });
@@ -49,77 +56,100 @@ export default function RoutePlanner({ notify }) {
         emergencyMode
       });
       setCompareResult(res);
-      notify && notify(`Multimodal comparison completed. Recommended: ${res.recommendation.mode.toUpperCase()}`);
+      notify && notify(`Risk-weighted routing complete: Recommended ${res.recommendation.mode.toUpperCase()}`);
     } catch (_) {
       // Client-side fallback computation
       const road = computeSafetyRoute(origin, destination, 1, 'road');
-      if (!road) {
+      const railway = computeSafetyRoute(origin, destination, 1, 'railway');
+      const waterway = computeSafetyRoute(origin, destination, 1, 'waterway');
+      const air = computeSafetyRoute(origin, destination, 1, 'air');
+      const fallbackRoutes = { road, railway, waterway, air };
+      const available = Object.keys(fallbackRoutes).filter((k) => fallbackRoutes[k] !== null);
+
+      if (available.length === 0) {
         setError('No viable safe route found between these locations.');
         setCompareResult(null);
       } else {
+        let recMode = 'road';
+        if (emergencyMode && air) recMode = 'air';
+        else if (cargoType === 'Heavy Cargo' && (waterway || railway)) recMode = waterway ? 'waterway' : 'railway';
+        else if (priority === 'High' && air) recMode = 'air';
+        else if (railway && railway.safetyIndex > 85) recMode = 'railway';
+        else recMode = road ? 'road' : available[0];
+
         setCompareResult({
-          routes: { road, railway: null, waterway: null, air: null },
+          routes: fallbackRoutes,
           recommendation: {
-            mode: 'road',
-            reason: 'Offline mode active. Displaying default road route.',
-            route: road
+            mode: recMode,
+            reason: 'Risk-weighted route computed using offline multimodal graph heuristic.',
+            route: fallbackRoutes[recMode]
           }
         });
-        notify && notify(`Offline road route calculated: ${road.totalKm} km`);
+        notify && notify(`Offline multimodal route calculated: Recommended ${recMode.toUpperCase()}`);
       }
     } finally {
       setBusy(false);
     }
   };
 
+  // Find incidents along origin / destination / route corridors
+  const routeIncidents = (compareResult?.recommendation?.route?.edges || []).flatMap(edge => {
+    return incidents.filter(inc => {
+      if (inc.status === 'resolved') return false;
+      const matchNode = inc.nodeId === edge.from.id || inc.nodeId === edge.to.id;
+      const matchRoad = inc.road && edge.road && inc.road.toLowerCase().includes(edge.road.toLowerCase());
+      return matchNode || matchRoad;
+    });
+  });
+
   return (
     <div style={{ display: 'grid', gap: 20 }}>
       {/* Route Form */}
       <form onSubmit={plan} style={formStyle}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
-          <label style={labelStyle}>Origin
+          <label style={labelStyle}>{t('route.origin') || 'Origin'}
             <select value={origin} onChange={(e) => setOrigin(e.target.value)} style={selectStyle}>
-              {cityNodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
+              {cityNodes.map((n) => <option key={n.id} value={n.id}>{t(`enum.${n.id}`) || n.name}, {t(`enum.${n.state}`) || n.state}</option>)}
             </select>
           </label>
-          <label style={labelStyle}>Destination
+          <label style={labelStyle}>{t('route.dest') || 'Destination'}
             <select value={destination} onChange={(e) => setDestination(e.target.value)} style={selectStyle}>
-              {cityNodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
+              {cityNodes.map((n) => <option key={n.id} value={n.id}>{t(`enum.${n.id}`) || n.name}, {t(`enum.${n.state}`) || n.state}</option>)}
             </select>
           </label>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, width: '100%' }}>
-          <label style={labelStyle}>Cargo Type
+          <label style={labelStyle}>{t('route.cargo') || 'Cargo Type'}
             <select value={cargoType} onChange={(e) => setCargoType(e.target.value)} style={selectStyle}>
-              <option>General Cargo</option>
-              <option>Perishable</option>
-              <option>Pharmaceutical / Medicine</option>
-              <option>Emergency Supplies</option>
-              <option>High Value</option>
-              <option>Heavy Cargo</option>
+              <option value="General Cargo">{t('cargo.general') || 'General Cargo'}</option>
+              <option value="Perishable">{t('cargo.perishable') || 'Perishable'}</option>
+              <option value="Pharmaceutical / Medicine">{t('cargo.pharma') || 'Pharmaceutical / Medicine'}</option>
+              <option value="Emergency Supplies">{t('cargo.emergency') || 'Emergency Supplies'}</option>
+              <option value="High Value">{t('cargo.highValue') || 'High Value'}</option>
+              <option value="Heavy Cargo">{t('cargo.heavy') || 'Heavy Cargo'}</option>
             </select>
           </label>
-          <label style={labelStyle}>Weight (kg)
+          <label style={labelStyle}>{t('route.weight') || 'Weight (kg)'}
             <input type="number" placeholder="e.g. 500" value={cargoWeight} onChange={(e) => setCargoWeight(e.target.value)} style={selectStyle} />
           </label>
-          <label style={labelStyle}>Priority
+          <label style={labelStyle}>{t('route.priority') || 'Priority'}
             <select value={priority} onChange={(e) => setPriority(e.target.value)} style={selectStyle}>
-              <option>Normal</option>
-              <option>High</option>
-              <option>Emergency</option>
+              <option value="Normal">{t('enum.normal') || 'Normal'}</option>
+              <option value="High">{t('enum.high') || 'High'}</option>
+              <option value="Emergency">{t('enum.emergency') || 'Emergency'}</option>
             </select>
           </label>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8, flexWrap: 'wrap', gap: 10 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: emergencyMode ? '#dc2626' : '#4b5563', cursor: 'pointer' }}>
             <input type="checkbox" checked={emergencyMode} onChange={(e) => setEmergencyMode(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#dc2626' }} />
-            🚨 Emergency Logistics Mode
+            🚨 {t('route.emergencyMode') || 'Emergency Logistics Priority'}
           </label>
           
           <button type="submit" disabled={busy} style={btnStyle}>
-            {busy ? 'Evaluating Multimodal Corridors…' : '⚖️ Compare Routes'}
+            {busy ? t('route.btn_planning') || 'Evaluating Multimodal Corridors…' : `⚖️ Calculate Risk-Weighted Route`}
           </button>
         </div>
       </form>
@@ -129,39 +159,73 @@ export default function RoutePlanner({ notify }) {
       {compareResult && compareResult.recommendation && (
         <div style={{ display: 'grid', gap: 18 }}>
           
-          {/* Recommendation Banner */}
+          {/* Recommendation Banner with Incident-Aware Routing terminology */}
           <div style={recommendationBanner(emergencyMode)}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <span style={{ fontSize: 22 }}>{emergencyMode ? '🚨' : '🧠'}</span>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Risk-Aware Multimodal Recommendation</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 22 }}>{emergencyMode ? '🚨' : '🧠'}</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800 }}>
+                    Incident-Aware Routing & Multimodal Recommendation
+                  </h3>
+                  <span style={{ fontSize: 10, opacity: 0.85, fontWeight: 700 }}>
+                    Risk-weighted route engine with dynamic disruption penalties
+                  </span>
+                </div>
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(0,0,0,0.06)', padding: '3px 8px', borderRadius: 6 }}>
+                Dijkstra Graph Safety Index: {compareResult.recommendation.route.safetyIndex}%
+              </span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, lineHeight: 1.5, opacity: 0.95 }}>
+            <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, opacity: 0.95 }}>
               {compareResult.recommendation.reason}
             </p>
           </div>
 
+          {/* Active Hazards Intersecting Corridor */}
+          {routeIncidents.length > 0 && (
+            <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <span style={{ fontSize: 16 }}>⚠️</span>
+                <b style={{ fontSize: 12, color: '#92400e' }}>Active Corridor Hazards Influencing Safety Index</b>
+              </div>
+              <div style={{ display: 'grid', gap: 6 }}>
+                {routeIncidents.slice(0, 3).map((inc) => (
+                  <div key={inc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#78350f', background: '#ffffff', padding: '6px 10px', borderRadius: 6, border: '1px solid #fde68a' }}>
+                    <span><b>{inc.title}</b> ({inc.road || 'Corridor'})</span>
+                    <span style={{ fontWeight: 800, color: '#b91c1c' }}>Dynamic disruption penalty applied</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Map display */}
-          <LiveMap height={340} focusRouteEdges={compareResult.recommendation.route.edges} />
+          <LiveMap height={360} focusRouteEdges={compareResult.recommendation.route.edges} />
 
           {/* Multimodal Comparison Cards */}
-          <h4 style={{ fontSize: 13, color: '#374151', margin: '10px 0 0 0', fontWeight: 800 }}>Available Multimodal Options</h4>
+          <h4 style={{ fontSize: 13, color: '#374151', margin: '6px 0 0 0', fontWeight: 800 }}>
+            {t('route.availableOptions') || 'Available Multimodal Options (Risk-Weighted)'}
+          </h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <ModeCard mode="road" title="ROAD" icon="🚚" route={compareResult.routes.road} isRecommended={compareResult.recommendation.mode === 'road'} />
-            <ModeCard mode="railway" title="RAIL + ROAD" icon="🚂" route={compareResult.routes.railway} isRecommended={compareResult.recommendation.mode === 'railway'} />
-            <ModeCard mode="waterway" title="WATERWAY + ROAD" icon="🚢" route={compareResult.routes.waterway} isRecommended={compareResult.recommendation.mode === 'waterway'} />
-            <ModeCard mode="air" title="AIR + ROAD" icon="✈️" route={compareResult.routes.air} isRecommended={compareResult.recommendation.mode === 'air'} />
+            <ModeCard mode="road" title={t('map.road') || "ROAD"} icon="🚚" route={compareResult.routes.road} isRecommended={compareResult.recommendation.mode === 'road'} t={t} />
+            <ModeCard mode="railway" title={t('map.rail') || "RAIL + ROAD"} icon="🚂" route={compareResult.routes.railway} isRecommended={compareResult.recommendation.mode === 'railway'} t={t} />
+            <ModeCard mode="waterway" title={t('map.water') || "WATERWAY + ROAD"} icon="🚢" route={compareResult.routes.waterway} isRecommended={compareResult.recommendation.mode === 'waterway'} t={t} />
+            <ModeCard mode="air" title={t('map.air') || "AIR + ROAD"} icon="✈️" route={compareResult.routes.air} isRecommended={compareResult.recommendation.mode === 'air'} t={t} />
           </div>
 
           {/* Route Segments for Recommended */}
           <div style={{ marginTop: 10 }}>
-            <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>RECOMMENDED ROUTE SEGMENTS</h4>
+            <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>
+              {t('route.recommendedSegments') || 'RECOMMENDED ROUTE SEGMENTS & HAZARD STATUS'}
+            </h4>
             <div style={{ display: 'grid', gap: 6 }}>
               {compareResult.recommendation.route.edges.map((e, i) => (
                 <div key={i} style={segmentStyle}>
-                  <span style={{ fontWeight: 700 }}>{e.from.name} → {e.to.name}</span>
+                  <span style={{ fontWeight: 700 }}>{t(`enum.${e.from.id}`) || e.from.name} → {t(`enum.${e.to.id}`) || e.to.name}</span>
                   <span style={{ color: '#7c8f87' }}>[{e.mode.toUpperCase()}] {e.road} · {e.km} km</span>
                   <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
-                    {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution' : '🔴 Disrupted'}
+                    {e.condition === 'clear' ? `🟢 Clear & Safe` : e.condition === 'caution' ? `⚠️ Caution` : `🔴 Disrupted`}
                   </span>
                 </div>
               ))}
@@ -173,7 +237,7 @@ export default function RoutePlanner({ notify }) {
   );
 }
 
-function ModeCard({ title, icon, route, isRecommended }) {
+function ModeCard({ title, icon, route, isRecommended, t }) {
   if (!route) {
     return (
       <div style={{ ...modeCardBase, opacity: 0.5, background: '#f3f4f6' }}>
@@ -181,7 +245,7 @@ function ModeCard({ title, icon, route, isRecommended }) {
           <span>{icon}</span>
           <b style={{ fontSize: 12, color: '#6b7280' }}>{title}</b>
         </div>
-        <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>Route unavailable</div>
+        <div style={{ fontSize: 11, color: '#9ca3af', fontStyle: 'italic' }}>{t('route.unavailable') || 'Route unavailable'}</div>
       </div>
     );
   }
@@ -193,7 +257,7 @@ function ModeCard({ title, icon, route, isRecommended }) {
     <div style={{ ...modeCardBase, border: `2px solid ${borderCol}`, background: bgCol, position: 'relative' }}>
       {isRecommended && (
         <div style={{ position: 'absolute', top: -10, right: 10, background: '#10b981', color: 'white', fontSize: 10, fontWeight: 800, padding: '2px 8px', borderRadius: 12 }}>
-          RECOMMENDED
+          {t('route.recommended') || 'RECOMMENDED'}
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -201,9 +265,9 @@ function ModeCard({ title, icon, route, isRecommended }) {
         <b style={{ fontSize: 13, color: '#1f2937' }}>{title}</b>
       </div>
       <div style={{ display: 'grid', gap: 6 }}>
-        <div style={cardRow}><span style={cardLabel}>Time:</span> <span style={{ fontWeight: 800, color: '#111827' }}>{formatMins(route.etaMinutes)}</span></div>
-        <div style={cardRow}><span style={cardLabel}>Distance:</span> <span style={{ fontWeight: 700, color: '#4b5563' }}>{route.totalKm} km</span></div>
-        <div style={cardRow}><span style={cardLabel}>Safety:</span> <span style={{ fontWeight: 800, color: route.safetyIndex > 80 ? '#059669' : '#d97706' }}>{route.safetyIndex}%</span></div>
+        <div style={cardRow}><span style={cardLabel}>{t('route.time') || 'Time'}:</span> <span style={{ fontWeight: 800, color: '#111827' }}>{formatMins(route.etaMinutes)}</span></div>
+        <div style={cardRow}><span style={cardLabel}>{t('route.distance') || 'Distance'}:</span> <span style={{ fontWeight: 700, color: '#4b5563' }}>{route.totalKm} km</span></div>
+        <div style={cardRow}><span style={cardLabel}>{t('route.safety') || 'Safety'}:</span> <span style={{ fontWeight: 800, color: route.safetyIndex > 80 ? '#059669' : '#d97706' }}>{route.safetyIndex}%</span></div>
       </div>
     </div>
   );

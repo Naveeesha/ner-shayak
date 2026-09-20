@@ -1,33 +1,50 @@
 const express = require('express');
-const { v4: uuid } = require('uuid');
-const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
-router.get('/', requireAuth, (req, res) => {
-  const alerts = db.prepare('SELECT * FROM alerts ORDER BY createdAt DESC LIMIT 100').all();
-  res.json({ alerts });
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const alerts = await supabaseService.getAlerts(100);
+    res.json({ alerts });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch alerts', detail: err.message });
+  }
 });
 
 // field, logistics, official, and system integrations can raise alerts; drivers receive them
-router.post('/', requireAuth, requireRole('field', 'logistics', 'official'), (req, res) => {
+router.post('/', requireAuth, requireRole('field', 'logistics', 'official'), async (req, res) => {
   const { type, tone = 'amber', icon = 'bell', title, text, nodeId, road, severity = 'minor' } = req.body || {};
   if (!type || !title || !text) return res.status(400).json({ error: 'type, title and text are required' });
-  const alert = { id: uuid(), type, tone, icon, title, text, nodeId: nodeId || null, road: road || null, severity, createdAt: new Date().toISOString(), createdBy: req.user.id };
-  db.prepare(`INSERT INTO alerts (id,type,tone,icon,title,text,nodeId,road,severity,createdAt,createdBy)
-    VALUES (@id,@type,@tone,@icon,@title,@text,@nodeId,@road,@severity,@createdAt,@createdBy)`).run(alert);
-  res.status(201).json({ alert });
+
+  try {
+    const alert = await supabaseService.createAlert({
+      type,
+      tone,
+      icon,
+      title,
+      text,
+      nodeId: nodeId || null,
+      road: road || null,
+      severity,
+      createdBy: req.user.id,
+    });
+    res.status(201).json({ alert });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create alert', detail: err.message });
+  }
 });
 
-router.delete('/:id', requireAuth, requireRole('official', 'field', 'logistics'), (req, res) => {
-  const alert = db.prepare('SELECT * FROM alerts WHERE id = ?').get(req.params.id);
-  if (!alert) return res.status(404).json({ error: 'Alert not found' });
-  if (req.user.role !== 'official' && alert.createdBy !== req.user.id) {
-    return res.status(403).json({ error: 'You do not have permission to delete this alert' });
+router.delete('/:id', requireAuth, requireRole('official', 'field', 'logistics'), async (req, res) => {
+  try {
+    const result = await supabaseService.deleteAlert(req.params.id, req.user.id, req.user.role);
+    if (result.notFound) return res.status(404).json({ error: 'Alert not found' });
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to delete this alert' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete alert', detail: err.message });
   }
-  db.prepare('DELETE FROM alerts WHERE id = ?').run(req.params.id);
-  res.json({ ok: true });
 });
 
 module.exports = router;

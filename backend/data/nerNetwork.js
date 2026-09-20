@@ -36,6 +36,11 @@ const NODES = [
   { id: 'agartala_airport',  name: 'MBB Airport (IXA)', state: 'Tripura', lat: 23.8864, lng: 91.2406, type: 'airport', cargo: true },
   { id: 'silchar_airport',   name: 'Kumbhirgram Airport (IXS)', state: 'Assam', lat: 24.9125, lng: 92.9786, type: 'airport', cargo: false },
   { id: 'shillong_airport',  name: 'Umroi Airport (SHL)', state: 'Meghalaya', lat: 25.7061, lng: 91.9786, type: 'airport', cargo: false },
+  { id: 'dimapur_airport',   name: 'Dimapur Airport (DMU)', state: 'Nagaland', lat: 25.8839, lng: 93.7711, type: 'airport', cargo: true },
+  { id: 'lengpui_airport',   name: 'Lengpui Airport (AJL)', state: 'Mizoram', lat: 23.8406, lng: 92.6194, type: 'airport', cargo: true },
+  { id: 'hollongi_airport',  name: 'Donyi Polo Airport (HGI)', state: 'Arunachal Pradesh', lat: 26.9933, lng: 93.6389, type: 'airport', cargo: true },
+  { id: 'bagdogra_airport',  name: 'Bagdogra Airport (IXB)', state: 'West Bengal (gateway)', lat: 26.6812, lng: 88.3286, type: 'airport', cargo: true },
+  { id: 'pakyong_airport',   name: 'Pakyong Airport (PYG)', state: 'Sikkim', lat: 27.2325, lng: 88.5861, type: 'airport', cargo: false },
 ];
 
 const EDGES = [
@@ -75,14 +80,21 @@ const EDGES = [
   { from: 'nagaon', to: 'jorhat', km: 195, terrainFactor: 1.0, road: 'NFR Upper Assam Freight Rail Line', mode: 'railway' },
   { from: 'jorhat', to: 'dibrugarh', km: 130, terrainFactor: 1.0, road: 'NFR Tinsukia-Dibrugarh Rail Line', mode: 'railway' },
   { from: 'nagaon', to: 'dimapur', km: 190, terrainFactor: 1.1, road: 'NFR Nagaland Express Rail Corridor', mode: 'railway' },
+  { from: 'dimapur', to: 'kohima', km: 82, terrainFactor: 1.2, road: 'NFR Dimapur-Zubza Rail Corridor', mode: 'railway' },
   { from: 'nagaon', to: 'silchar', km: 215, terrainFactor: 1.3, road: 'NFR Hill Section Lumding-Badarpur Freight Rail', mode: 'railway' },
   { from: 'silchar', to: 'agartala', km: 210, terrainFactor: 1.2, road: 'NFR Tripura Broad-Gauge Rail Line', mode: 'railway' },
+  { from: 'silchar', to: 'aizawl', km: 160, terrainFactor: 1.1, road: 'NFR Bairabi-Sairang Rail Corridor', mode: 'railway' },
+  { from: 'silchar', to: 'imphal', km: 230, terrainFactor: 1.2, road: 'NFR Jiribam-Imphal Rail Corridor', mode: 'railway' },
+  { from: 'tezpur', to: 'itanagar', km: 165, terrainFactor: 1.0, road: 'NFR Rangiya-Murkongselek Rail (Naharlagun Spur)', mode: 'railway' },
+  { from: 'dibrugarh', to: 'pasighat', km: 135, terrainFactor: 1.0, road: 'NFR Bogibeel Rail Corridor', mode: 'railway' },
   { from: 'guwahati', to: 'siliguri', km: 260, terrainFactor: 1.0, road: 'NFR Trunk Rail Freight Corridor', mode: 'railway' },
 
   // --- WATERWAY FREIGHT CORRIDORS (IWAI National Waterways NW-2 & NW-16) ---
   { from: 'guwahati', to: 'tezpur', km: 190, terrainFactor: 1.0, road: 'NW-2 Brahmaputra River Barges (Pandu ↔ Tezpur Port)', mode: 'waterway' },
   { from: 'tezpur', to: 'jorhat', km: 210, terrainFactor: 1.0, road: 'NW-2 Brahmaputra Waterway (Tezpur ↔ Neamati Ghat Port)', mode: 'waterway' },
   { from: 'jorhat', to: 'dibrugarh', km: 140, terrainFactor: 1.0, road: 'NW-2 Upper Brahmaputra Waterway (Neamati ↔ Dibrugarh Port)', mode: 'waterway' },
+  { from: 'dibrugarh', to: 'pasighat', km: 120, terrainFactor: 1.0, road: 'NW-2 Sadiya/Pasighat Waterway', mode: 'waterway' },
+  { from: 'guwahati', to: 'siliguri', km: 290, terrainFactor: 1.0, road: 'NW-2 Lower Brahmaputra Freight Route (Pandu ↔ Dhubri Port)', mode: 'waterway' },
   { from: 'silchar', to: 'karimganj', km: 62, terrainFactor: 1.0, road: 'NW-16 Barak River Freight Corridor (Silchar ↔ Karimganj Inland Port)', mode: 'waterway' },
 
   // --- AIRPORT LAST MILE (ROAD) ---
@@ -92,13 +104,28 @@ const EDGES = [
   { from: 'agartala', to: 'agartala_airport', km: 12, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
   { from: 'silchar', to: 'silchar_airport', km: 26, terrainFactor: 1.1, road: 'Airport Road', mode: 'road' },
   { from: 'shillong', to: 'shillong_airport', km: 30, terrainFactor: 1.3, road: 'Airport Road', mode: 'road' },
+  { from: 'dimapur', to: 'dimapur_airport', km: 7, terrainFactor: 1.0, road: 'Airport Road', mode: 'road' },
+  { from: 'aizawl', to: 'lengpui_airport', km: 32, terrainFactor: 1.4, road: 'NH54 / Airport Road', mode: 'road' },
+  { from: 'itanagar', to: 'hollongi_airport', km: 25, terrainFactor: 1.2, road: 'Airport Expressway', mode: 'road' },
+  { from: 'siliguri', to: 'bagdogra_airport', km: 14, terrainFactor: 1.0, road: 'AH2 / Airport Road', mode: 'road' },
+  { from: 'gangtok', to: 'pakyong_airport', km: 28, terrainFactor: 1.8, road: 'Pakyong Road', mode: 'road' },
 
   // --- AIR CARGO FLIGHTS ---
   { from: 'guwahati_airport', to: 'imphal_airport', km: 250, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
   { from: 'guwahati_airport', to: 'dibrugarh_airport', km: 350, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
   { from: 'guwahati_airport', to: 'agartala_airport', km: 250, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
   { from: 'guwahati_airport', to: 'silchar_airport', km: 170, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'guwahati_airport', to: 'shillong_airport', km: 95, terrainFactor: 1.0, road: 'Air Route GAU-SHL', mode: 'air' },
+  { from: 'guwahati_airport', to: 'dimapur_airport', km: 220, terrainFactor: 1.0, road: 'Air Route GAU-DMU', mode: 'air' },
+  { from: 'guwahati_airport', to: 'lengpui_airport', km: 290, terrainFactor: 1.0, road: 'Air Route GAU-AJL', mode: 'air' },
+  { from: 'guwahati_airport', to: 'hollongi_airport', km: 210, terrainFactor: 1.0, road: 'Air Route GAU-HGI', mode: 'air' },
+  { from: 'guwahati_airport', to: 'bagdogra_airport', km: 330, terrainFactor: 1.0, road: 'Air Route GAU-IXB', mode: 'air' },
+  { from: 'bagdogra_airport', to: 'pakyong_airport', km: 80, terrainFactor: 1.0, road: 'Air Route IXB-PYG', mode: 'air' },
   { from: 'imphal_airport', to: 'agartala_airport', km: 270, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'imphal_airport', to: 'dimapur_airport', km: 140, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'lengpui_airport', to: 'agartala_airport', km: 170, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'lengpui_airport', to: 'imphal_airport', km: 200, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
+  { from: 'dibrugarh_airport', to: 'hollongi_airport', km: 150, terrainFactor: 1.0, road: 'Air Route', mode: 'air' },
 ];
 
 module.exports = { NODES, EDGES };

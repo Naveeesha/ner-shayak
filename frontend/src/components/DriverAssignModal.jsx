@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { DRIVER_ROSTER } from '../services/driverService';
+import { useTranslation } from '../hooks/useTranslation';
 
 export default function DriverAssignModal({ isOpen, onClose, targetItem, onDriverAssigned, notify }) {
+  const { t } = useTranslation();
   const [selectedDriverId, setSelectedDriverId] = useState('');
   const [search, setSearch] = useState('');
 
@@ -26,8 +28,8 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
       <div className="cmd-modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 620 }}>
         <header style={{ padding: '16px 20px', background: '#175b4a', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>Assign Driver to Logistics Shipment</h3>
-            <small style={{ color: '#d2f2e5', fontSize: 10 }}>Target: {targetItem?.title || 'Cargo Shipment'} ({targetItem?.origin || 'Origin'} → {targetItem?.dest || 'Destination'})</small>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{t('dash.assignDriver') || 'Assign Driver to Logistics Shipment'}</h3>
+            <small style={{ color: '#d2f2e5', fontSize: 10 }}>{t('dash.target') || 'Target'}: {targetItem?.title || 'Cargo Shipment'} ({targetItem?.origin || 'Origin'} → {targetItem?.dest || 'Destination'})</small>
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 0, color: '#fff', fontSize: 18, cursor: 'pointer' }}>✕</button>
         </header>
@@ -35,7 +37,7 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
         <div style={{ padding: '12px 18px', background: '#f4faf6', borderBottom: '1px solid #e1ebe4' }}>
           <input
             type="text"
-            placeholder="Search driver by name, district, vehicle number..."
+            placeholder={t('dash.searchDriver') || "Search driver by name, district, vehicle number..."}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: '100%', height: 38, padding: '0 12px', border: '1px solid #d2e4d8', borderRadius: 7, fontSize: 12, outline: 'none' }}
@@ -43,7 +45,7 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
         </div>
 
         <div style={{ padding: '14px 18px', maxHeight: '55vh', overflowY: 'auto', display: 'grid', gap: 10 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: '#7a8d85', letterSpacing: 1.2 }}>REGISTERED NORTH EAST DRIVERS (10 ROSTER)</div>
+          <div style={{ fontSize: 10, fontWeight: 800, color: '#7a8d85', letterSpacing: 1.2 }}>{t('dash.registeredDrivers') || 'REGISTERED NORTH EAST DRIVERS (10 ROSTER)'}</div>
           {filtered.map((d) => (
             <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', border: '1px solid #e1ebe4', borderRadius: 9, background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -56,10 +58,10 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
                     {d.vehicleNumber}
                   </span>
                   <div style={{ fontSize: 10, color: '#7c8f87', marginTop: 2 }}>
-                    📍 {d.district}, {d.state} · 📞 {d.phone}
+                    📍 {t(`enum.${d.district}`) || d.district}, {t(`enum.${d.state}`) || d.state} · 📞 {d.phone}
                   </div>
                   <div style={{ fontSize: 9, color: '#9bada3', marginTop: 1 }}>
-                    Specialization: {d.cargoType} ({d.experienceYears} yrs exp)
+                    {t('dash.specialization') || 'Specialization'}: {t(`enum.${d.cargoType}`) || d.cargoType} ({d.experienceYears} {t('dash.yrsExp') || 'yrs exp'})
                   </div>
                 </div>
               </div>
@@ -68,7 +70,7 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
                 onClick={() => handleAssign(d)}
                 style={{ padding: '7px 14px', border: 0, borderRadius: 6, background: '#1e745b', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
               >
-                Assign Driver ➔
+                {t('dash.assignDriverBtn') || 'Assign Driver'} ➔
               </button>
             </div>
           ))}
