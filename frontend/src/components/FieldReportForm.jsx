@@ -4,6 +4,7 @@ import { offlineQueue, isOnline } from '../services/offlineQueue';
 import { acquireGpsPosition } from '../services/gpsHelper';
 import { useTranslation } from '../hooks/useTranslation';
 import { useAuth } from '../context/AuthContext';
+import IncidentPhotoModal from './IncidentPhotoModal';
 
 const CATEGORIES = [
   { id: 'road_block', label: 'Road blocked / Obstruction' },
@@ -23,6 +24,7 @@ export default function FieldReportForm({ notify }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('list'); // 'list' | 'form'
+  const [selectedPhotoIncident, setSelectedPhotoIncident] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,8 +83,52 @@ export default function FieldReportForm({ notify }) {
   const onPhoto = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate format (JPG, JPEG, PNG, WEBP)
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    const mime = (file.type || '').toLowerCase();
+    if (!allowed.includes(mime)) {
+      setError('Invalid file format. Allowed formats: JPG, JPEG, PNG, WEBP.');
+      return;
+    }
+
+    // Validate size (max 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size exceeds 10MB limit. Please choose a smaller photo.');
+      return;
+    }
+
+    setError('');
     const reader = new FileReader();
-    reader.onload = () => setPhoto(reader.result);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Client-side canvas compression: max 1600px dimension
+        const maxDim = 1600;
+        let width = img.width;
+        let height = img.height;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        setPhoto(compressedDataUrl);
+      };
+      img.onerror = () => {
+        setPhoto(event.target.result);
+      };
+      img.src = event.target.result;
+    };
     reader.readAsDataURL(file);
   };
 
@@ -91,13 +137,40 @@ export default function FieldReportForm({ notify }) {
     if (!form.title.trim()) { setError('Please give the report a short title.'); return; }
     setError('');
     setBusy(true);
+
+    const incidentId = `inc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    let uploadedPhotoUrl = null;
+
+    // Upload to Supabase Storage before incident creation if online
+    if (photo) {
+      if (isOnline()) {
+        try {
+          const upRes = await api.uploadPhoto(incidentId, photo, 'image/jpeg', `${incidentId}.jpg`);
+          if (upRes && upRes.success && upRes.photoUrl) {
+            uploadedPhotoUrl = upRes.photoUrl;
+          } else {
+            setBusy(false);
+            setError('Photo upload failed. Please try again.');
+            return;
+          }
+        } catch (upErr) {
+          setBusy(false);
+          setError(`Photo upload failed. Please try again. (${upErr.message})`);
+          return;
+        }
+      }
+    }
+
     const payload = {
+      id: incidentId,
       ...form,
       lat: coords?.lat,
       lng: coords?.lng,
-      photoDataUrl: photo,
+      photoUrl: uploadedPhotoUrl,
+      photoDataUrl: uploadedPhotoUrl || photo,
       createdAt: new Date().toISOString(),
     };
+
     try {
       if (isOnline()) {
         const res = await api.createReport(payload);
@@ -328,6 +401,42 @@ export default function FieldReportForm({ notify }) {
                       {r.description}
                     </p>
                   )}
+
+                  {/* Attached Photo Evidence Thumbnail with Click-to-Enlarge */}
+                  {(r.photoUrl || r.photoDataUrl) && (
+                    <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div
+                        onClick={() => setSelectedPhotoIncident(r)}
+                        style={{
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          background: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          maxWidth: '100%',
+                        }}
+                      >
+                        <img
+                          src={r.photoUrl || r.photoDataUrl}
+                          alt="Incident evidence"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = 'inline-block';
+                          }}
+                          style={{ width: 44, height: 34, objectFit: 'cover', borderRadius: 4, border: '1px solid #86efac' }}
+                        />
+                        <span style={{ display: 'none', fontSize: 10, color: '#991b1b', fontWeight: 600 }}>
+                          📷 Incident photo unavailable
+                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#166534' }}>
+                          📷 View Photo Evidence ➔
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -408,10 +517,27 @@ export default function FieldReportForm({ notify }) {
               {coords ? `📍 GPS Fix: ${coords.lat.toFixed(4)}, ${coords.lng.toFixed(4)}` : (t('report.attachGPS') || '📍 Attach Live GPS Location')}
             </button>
             <label style={secondaryBtn}>
-              {photo ? '✓ Photo Evidence Attached' : '📷 Attach On-Site Photo'}
+              {photo ? '✓ Change Photo Evidence' : '📷 Attach On-Site Photo'}
               <input type="file" accept="image/*" onChange={onPhoto} style={{ display: 'none' }} />
             </label>
           </div>
+
+          {photo && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', padding: '6px 12px', borderRadius: 6 }}>
+              <img src={photo} alt="Selected preview" style={{ width: 52, height: 38, objectFit: 'cover', borderRadius: 4, border: '1px solid #22c55e' }} />
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 11, color: '#15803d', fontWeight: 700, display: 'block' }}>✓ Photo evidence attached</span>
+                <span style={{ fontSize: 9, color: '#166534' }}>Will be uploaded directly to Supabase Storage</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhoto(null)}
+                style={{ border: 'none', background: 'transparent', color: '#dc2626', fontSize: 11, cursor: 'pointer', fontWeight: 700 }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
 
           {error && <p style={{ color: '#b91c1c', fontSize: 12, fontWeight: 700, margin: 0 }}>{error}</p>}
 
@@ -433,6 +559,12 @@ export default function FieldReportForm({ notify }) {
           </div>
         </form>
       )}
+
+      <IncidentPhotoModal
+        isOpen={!!selectedPhotoIncident}
+        incident={selectedPhotoIncident}
+        onClose={() => setSelectedPhotoIncident(null)}
+      />
     </div>
   );
 }

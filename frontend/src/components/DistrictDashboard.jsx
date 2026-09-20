@@ -1,18 +1,25 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
+import IncidentPhotoModal from './IncidentPhotoModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 export default function DistrictDashboard({ notify }) {
   const { t } = useTranslation();
   const [data, setData] = useState(null);
+  const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedPhotoIncident, setSelectedPhotoIncident] = useState(null);
 
   const load = () => {
     setLoading(true);
-    api.dashboardSummary()
-      .then((res) => {
-        setData(res);
+    Promise.all([
+      api.dashboardSummary(),
+      api.reports().catch(() => ({ reports: [] })),
+    ])
+      .then(([summaryRes, repRes]) => {
+        setData(summaryRes);
+        setIncidents(repRes.reports || []);
         setError('');
       })
       .catch((err) => setError(err.message || 'Unable to load live operational summary.'))
@@ -181,6 +188,113 @@ export default function DistrictDashboard({ notify }) {
         </section>
       </div>
 
+      {/* Field Officer Ground Evidence & Photo Reports */}
+      <div className="card" style={{ padding: '18px 20px' }}>
+        <header style={{ padding: 0, minHeight: 'auto', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h4 style={{ fontSize: 13, color: '#155b4b', margin: 0, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+              📷 Field Officer Ground Evidence & Photo Reports
+            </h4>
+            <p style={{ fontSize: 10, color: '#6b7280', margin: '2px 0 0' }}>
+              Photographic proof submitted by field units via mobile app (synced to Supabase Storage)
+            </p>
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#047857', background: '#ecfdf5', padding: '3px 8px', borderRadius: 10 }}>
+            {incidents.filter(inc => inc.photoUrl || inc.photoDataUrl).length} Photos Available
+          </span>
+        </header>
+
+        {incidents.filter(inc => inc.photoUrl || inc.photoDataUrl).length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '20px 0', color: '#9ca3af', fontSize: 12 }}>
+            No incident photos attached in recent reports.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+            {incidents
+              .filter(inc => inc.photoUrl || inc.photoDataUrl)
+              .slice(0, 8)
+              .map(inc => {
+                const photoSrc = inc.photoUrl || inc.photoDataUrl;
+                return (
+                  <div
+                    key={inc.id}
+                    onClick={() => setSelectedPhotoIncident(inc)}
+                    style={{
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 8,
+                      overflow: 'hidden',
+                      background: '#fff',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                    }}
+                    title="Click to view full photo evidence"
+                  >
+                    <div style={{ position: 'relative', width: '100%', height: 120, background: '#111827', overflow: 'hidden' }}>
+                      <img
+                        src={photoSrc}
+                        alt={`Incident evidence at ${inc.location || 'site'}`}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = '<div style="display:flex;height:100%;align-items:center;justify-content:center;color:#ef4444;font-size:11px;">⚠️ Incident photo unavailable</div>';
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: 6,
+                          right: 6,
+                          background: 'rgba(0,0,0,0.7)',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 9,
+                          fontWeight: 700
+                        }}
+                      >
+                        🔍 View Photo
+                      </span>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: 6,
+                          left: 6,
+                          background: inc.severity === 'critical' ? '#dc2626' : inc.severity === 'major' ? '#ea580c' : '#ca8a04',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: 4,
+                          fontSize: 8,
+                          fontWeight: 800,
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {inc.severity || 'incident'}
+                      </span>
+                    </div>
+                    <div style={{ padding: '8px 10px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                      <div>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>
+                          {inc.type?.replace('_', ' ').toUpperCase() || 'INCIDENT'}
+                        </div>
+                        <div style={{ fontSize: 10, color: '#4b5563', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          📍 {inc.location || 'NER Corridor'}
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Reported: {inc.reportedAt ? new Date(inc.reportedAt).toLocaleDateString() : 'Recent'}</span>
+                        <span style={{ color: '#2563eb', fontWeight: 600 }}>ID: {String(inc.id).slice(0, 6)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </div>
+
       {/* Shipment Pipeline Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
         <Stat label={t('dash.shipPlanned') || "Shipments Planned"} value={data?.shipments?.planned ?? 0} />
@@ -193,6 +307,12 @@ export default function DistrictDashboard({ notify }) {
         <span>{t('dash.generatedAt') || 'Generated'}: {data?.generatedAt ? new Date(data.generatedAt).toLocaleString() : '—'}</span>
         <span>Auto-refreshing every 30s</span>
       </div>
+
+      <IncidentPhotoModal
+        isOpen={!!selectedPhotoIncident}
+        incident={selectedPhotoIncident}
+        onClose={() => setSelectedPhotoIncident(null)}
+      />
     </div>
   );
 }

@@ -1,8 +1,34 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const supabaseService = require('../services/supabaseService');
+const { uploadIncidentPhotoFromDataUrl } = require('../services/storageService');
+const {
+  notifyDriverIncident,
+  notifyFieldOfficerIncident,
+  notifyAffectedDrivers,
+  notifyIncidentResolved,
+} = require('../services/notificationService');
 
 const router = express.Router();
+
+// Upload incident photo directly to Supabase Storage incident-photos bucket
+router.post('/upload-photo', requireAuth, async (req, res) => {
+  const { incidentId, photoDataUrl } = req.body || {};
+  if (!incidentId || !photoDataUrl) {
+    return res.status(400).json({ error: 'incidentId and photoDataUrl are required' });
+  }
+
+  try {
+    const result = await uploadIncidentPhotoFromDataUrl(incidentId, photoDataUrl);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Photo upload failed. Please try again.' });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Reports Route] Photo upload exception:', err.message);
+    res.status(500).json({ error: 'Photo upload failed. Please try again.', detail: err.message });
+  }
+});
 
 const CATEGORIES = ['road_block', 'road_blockage', 'landslide', 'flood', 'bridge_damage', 'accident', 'traffic', 'vehicle_breakdown', 'poor_road_condition', 'weather_hazard', 'visibility_problem', 'infrastructure_damage', 'other'];
 const SEVERITIES = ['minor', 'moderate', 'major', 'critical', 'low', 'medium', 'high'];
@@ -29,6 +55,19 @@ router.get('/mine', requireAuth, async (req, res) => {
 router.post('/', requireAuth, async (req, res) => {
   try {
     const report = await supabaseService.createIncident(req.user.id, req.body || {}, req.user.role || 'field');
+
+    // Non-blocking SMS notification triggers
+    const role = (req.user.role || '').toLowerCase();
+    const isDriver = role === 'driver';
+    const dispatchFn = isDriver ? notifyDriverIncident : notifyFieldOfficerIncident;
+
+    Promise.allSettled([
+      dispatchFn(report),
+      notifyAffectedDrivers(report),
+    ]).catch((err) => {
+      console.warn('[Reports] Incident notification failed (non-blocking):', err.message);
+    });
+
     res.status(201).json({ report });
   } catch (err) {
     res.status(400).json({ error: err.message });
@@ -54,6 +93,18 @@ router.post('/sync', requireAuth, async (req, res) => {
         { preserveClientTimestamp: true }
       );
       saved.push(savedReport);
+
+      // Trigger notifications for newly synced reports
+      const role = (req.user.role || '').toLowerCase();
+      const isDriver = role === 'driver';
+      const dispatchFn = isDriver ? notifyDriverIncident : notifyFieldOfficerIncident;
+
+      Promise.allSettled([
+        dispatchFn(savedReport),
+        notifyAffectedDrivers(savedReport),
+      ]).catch((err) => {
+        console.warn('[Reports Sync] Notification failed (non-blocking):', err.message);
+      });
     } catch (err) {
       failed.push({ clientId: r.clientId, error: err.message });
     }
@@ -78,6 +129,13 @@ router.patch('/:id/status', requireAuth, async (req, res) => {
     );
     if (result.notFound) return res.status(404).json({ error: 'Report not found' });
     if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to update this report' });
+
+    // If resolved, notify operators and affected drivers
+    if (status === 'resolved' && result.report) {
+      notifyIncidentResolved(result.report).catch((err) => {
+        console.warn('[Reports] Resolve notification failed (non-blocking):', err.message);
+      });
+    }
 
     res.json({ report: result.report });
   } catch (err) {

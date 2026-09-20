@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import FieldReportForm from './FieldReportForm';
+import IncidentPhotoModal from './IncidentPhotoModal';
 import { useTranslation } from '../hooks/useTranslation';
 
 export default function FieldOfficerOverview({ navigate, notify }) {
@@ -11,6 +12,7 @@ export default function FieldOfficerOverview({ navigate, notify }) {
   const [allReports, setAllReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selectedPhotoIncident, setSelectedPhotoIncident] = useState(null);
 
   const load = () => {
     setLoading(true);
@@ -101,15 +103,44 @@ export default function FieldOfficerOverview({ navigate, notify }) {
                   <b style={{ color: '#25483d' }}>[{r.category?.toUpperCase().replace('_', ' ')}] {r.title}</b>
                   <span style={statusPill(r.status)}>{r.status}</span>
                 </div>
-                <div style={{ fontSize: 10, color: '#7a8f85', marginTop: 4, display: 'flex', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 10, color: '#7a8f85', marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                   <span>{r.road ? `Corridor: ${r.road}` : 'Location: Geo-tagged'}</span>
                   <span>{new Date(r.createdAt).toLocaleDateString()}</span>
                 </div>
+                {(r.photoUrl || r.photoDataUrl) && (
+                  <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPhotoIncident(r)}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        border: '1px solid #a7f3d0',
+                        background: '#ecfdf5',
+                        color: '#065f46',
+                        fontSize: 9,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      📷 View Photo Evidence
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </section>
       </div>
+
+      <IncidentPhotoModal
+        isOpen={!!selectedPhotoIncident}
+        incident={selectedPhotoIncident}
+        onClose={() => setSelectedPhotoIncident(null)}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import VehicleTracker from './VehicleTracker';
 import DriverAssignModal from './DriverAssignModal';
+import IncidentPhotoModal from './IncidentPhotoModal';
 import { DRIVER_ROSTER } from '../services/driverService';
 import { useTranslation } from '../hooks/useTranslation';
 
@@ -11,19 +12,26 @@ export default function LogisticsOverview({ navigate, notify }) {
   const { user } = useAuth();
   const [shipments, setShipments] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
+  const [selectedPhotoIncident, setSelectedPhotoIncident] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   const load = () => {
     setLoading(true);
-    Promise.all([api.shipments(), api.vehicles()])
-      .then(([sRes, vRes]) => {
+    Promise.all([
+      api.shipments(),
+      api.vehicles(),
+      api.reports().catch(() => ({ reports: [] })),
+    ])
+      .then(([sRes, vRes, repRes]) => {
         setShipments(sRes.shipments || []);
         setVehicles(vRes.vehicles || []);
+        setIncidents(repRes.reports || []);
         setError('');
       })
       .catch((err) => {
@@ -235,6 +243,89 @@ export default function LogisticsOverview({ navigate, notify }) {
             })}
           </div>
         </section>
+
+        {/* Live Corridor Disruptions & Photo Evidence */}
+        <section className="card" style={{ padding: '20px', marginTop: 16 }}>
+          <header style={{ padding: 0, minHeight: 'auto', marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <small style={{ color: '#0f766e', fontWeight: 800 }}>LIVE ROUTE DISRUPTIONS</small>
+              <h3 style={{ margin: '4px 0 0', fontSize: 15, color: '#111827', fontWeight: 800 }}>
+                Corridor Hazard Reports & Field Photographic Evidence
+              </h3>
+            </div>
+            <span style={{ fontSize: 10, color: '#6b7280' }}>
+              {incidents.filter(i => i.status !== 'resolved').length} Active Hazards Reported
+            </span>
+          </header>
+
+          {incidents.length === 0 ? (
+            <p style={{ fontSize: 11, color: '#6b7280', margin: 0 }}>No corridor disruptions reported. All freight routes operational.</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+              {incidents.slice(0, 6).map((inc) => {
+                const isCrit = inc.severity === 'critical' || inc.severity === 'major' || inc.severity === 'high';
+                return (
+                  <div
+                    key={inc.id}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      border: `1px solid ${isCrit ? '#fecaca' : '#e5e7eb'}`,
+                      background: isCrit ? '#fef2f2' : '#f9fafb',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: isCrit ? '#991b1b' : '#047857' }}>
+                        {inc.severity || 'MODERATE'}
+                      </span>
+                      <span style={{ fontSize: 9, color: '#6b7280' }}>
+                        {inc.createdAt ? new Date(inc.createdAt).toLocaleDateString() : ''}
+                      </span>
+                    </div>
+                    <b style={{ fontSize: 12, color: '#111827', display: 'block' }}>{inc.title}</b>
+                    <span style={{ fontSize: 10, color: '#4b5563', display: 'block', marginTop: 2 }}>
+                      📍 <b>Corridor:</b> {inc.road || 'State Highway'}
+                    </span>
+
+                    {(inc.photoUrl || inc.photoDataUrl) && (
+                      <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <img
+                          src={inc.photoUrl || inc.photoDataUrl}
+                          alt="Hazard evidence"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            if (e.currentTarget.nextSibling) e.currentTarget.nextSibling.style.display = 'inline-block';
+                          }}
+                          style={{ width: 44, height: 32, objectFit: 'cover', borderRadius: 4, border: '1px solid #d1d5db', cursor: 'pointer' }}
+                          onClick={() => setSelectedPhotoIncident(inc)}
+                        />
+                        <span style={{ display: 'none', fontSize: 9, color: '#991b1b' }}>
+                          📷 Photo unavailable
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPhotoIncident(inc)}
+                          style={{
+                            border: '1px solid #bbf7d0',
+                            background: '#f0fdf4',
+                            color: '#166534',
+                            borderRadius: 4,
+                            padding: '3px 8px',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          📷 View Photo Evidence ➔
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
       </div>
 
       {/* Driver Assignment Modal */}
@@ -244,6 +335,12 @@ export default function LogisticsOverview({ navigate, notify }) {
         targetItem={selectedShipment || { title: 'Cargo Shipment' }}
         onDriverAssigned={handleDriverAssigned}
         notify={notify}
+      />
+
+      <IncidentPhotoModal
+        isOpen={!!selectedPhotoIncident}
+        incident={selectedPhotoIncident}
+        onClose={() => setSelectedPhotoIncident(null)}
       />
     </div>
   );

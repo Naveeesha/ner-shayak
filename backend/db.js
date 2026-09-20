@@ -85,6 +85,26 @@ CREATE TABLE IF NOT EXISTS shipments (
   etaMinutes INTEGER,
   createdAt TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS notification_logs (
+  id TEXT PRIMARY KEY,
+  event_type TEXT NOT NULL,
+  event_id TEXT,
+  recipient_user_id TEXT,
+  recipient_phone TEXT NOT NULL,
+  recipient_role TEXT,
+  message TEXT NOT NULL,
+  provider TEXT DEFAULT 'msg91',
+  provider_message_id TEXT,
+  status TEXT NOT NULL CHECK(status IN ('queued', 'sent', 'failed', 'skipped')),
+  error_message TEXT,
+  created_at TEXT NOT NULL,
+  sent_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_notification_logs_created_at ON notification_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_notification_logs_recipient ON notification_logs(recipient_phone);
+CREATE INDEX IF NOT EXISTS idx_notification_logs_event ON notification_logs(event_type, event_id);
 `);
 
 // --- Seed demo accounts (idempotent) ---

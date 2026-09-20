@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuid } = require('uuid');
 const { requireAuth, JWT_SECRET } = require('../middleware/auth');
 const supabaseService = require('../services/supabaseService');
+const { notifyNewUserRegistered } = require('../services/notificationService');
 
 const router = express.Router();
 
@@ -69,6 +70,12 @@ router.post('/signup', async (req, res) => {
     };
 
     const created = await supabaseService.createUser(user);
+
+    // Non-blocking SMS notification
+    notifyNewUserRegistered(created).catch((err) => {
+      console.warn('[Auth] Welcome notification failed (non-blocking):', err.message);
+    });
+
     const token = sign(created);
     res.status(201).json({ token, user: toPublicUser(created) });
   } catch (err) {

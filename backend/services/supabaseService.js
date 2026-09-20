@@ -1,6 +1,7 @@
 const { v4: uuid } = require('uuid');
 const { getSupabaseClient, isSupabaseConfigured } = require('../config/supabase');
 const db = require('../db'); // Local SQLite fallback if Supabase credentials are not yet configured
+const { uploadIncidentPhotoFromDataUrl } = require('./storageService');
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -344,8 +345,17 @@ const CATEGORIES = [
 
 const SEVERITIES = ['minor', 'moderate', 'major', 'critical', 'low', 'medium', 'high'];
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEMO_USER_UUID_MAP = {
+  'u-arjun': '11111111-1111-4000-8000-000000000001',
+  'u-priya': '33333333-3333-4000-8000-000000000001',
+  'u-rohan': '22222222-2222-4000-8000-000000000001',
+  'u-ananya': '44444444-4444-4000-8000-000000000001',
+};
+
 function toFrontendReport(inc) {
   if (!inc) return null;
+  const photo = inc.photo_url || inc.photoUrl || inc.photoDataUrl || null;
   return {
     id: inc.id,
     userId: inc.reporter_id || inc.userId,
@@ -360,7 +370,8 @@ function toFrontendReport(inc) {
     description: inc.description || '',
     lat: inc.lat,
     lng: inc.lng,
-    photoDataUrl: inc.photo_url || inc.photoDataUrl || null,
+    photoUrl: photo,
+    photoDataUrl: photo,
     status: inc.status === 'open' ? 'active' : inc.status,
     synced: 1,
     createdAt: inc.created_at || inc.createdAt,
@@ -407,15 +418,43 @@ async function getIncidentsByUserId(userId) {
 }
 
 async function createIncident(userId, body, userRole = 'field', { preserveClientTimestamp = false } = {}) {
-  const { nodeId, road, fromNode, toNode, category, severity = 'moderate', title, description, lat, lng, photoDataUrl, createdAt } = body;
+  const { nodeId, road, fromNode, toNode, category, severity = 'moderate', title, description, lat, lng, photoDataUrl, photoUrl, createdAt } = body;
   
   if (!category || !CATEGORIES.includes(category)) throw new Error('Invalid or missing category');
   if (!title) throw new Error('Title is required');
 
   const id = body.id || uuid();
+
+  // Sanitize reporter_id: Ensure it is a valid UUID for PostgreSQL
+  let validReporterId = null;
+  if (userId && UUID_REGEX.test(userId)) {
+    validReporterId = userId;
+  } else if (userId && DEMO_USER_UUID_MAP[userId]) {
+    validReporterId = DEMO_USER_UUID_MAP[userId];
+  } else if (userRole === 'field') {
+    validReporterId = '33333333-3333-4000-8000-000000000001'; // Priya Deka default
+  }
+
+  // Resolve Photo URL: Prefer existing photoUrl; if photoDataUrl is base64, auto-upload to Supabase Storage
+  let resolvedPhotoUrl = photoUrl || body.photo_url || null;
+  if (!resolvedPhotoUrl && photoDataUrl) {
+    if (typeof photoDataUrl === 'string' && (photoDataUrl.startsWith('data:image/') || photoDataUrl.length > 200)) {
+      try {
+        const uploadRes = await uploadIncidentPhotoFromDataUrl(id, photoDataUrl);
+        if (uploadRes && uploadRes.success && uploadRes.photoUrl) {
+          resolvedPhotoUrl = uploadRes.photoUrl;
+        }
+      } catch (uploadErr) {
+        console.warn('[SupabaseService] Auto-uploading base64 incident photo failed:', uploadErr.message);
+      }
+    } else if (typeof photoDataUrl === 'string' && photoDataUrl.startsWith('http')) {
+      resolvedPhotoUrl = photoDataUrl;
+    }
+  }
+
   const record = {
     id,
-    reporter_id: userId,
+    reporter_id: validReporterId,
     reporter_role: userRole,
     title,
     description: description || '',
@@ -424,9 +463,9 @@ async function createIncident(userId, body, userRole = 'field', { preserveClient
     status: 'active',
     node_id: nodeId || null,
     road: road || null,
-    lat: lat !== undefined ? Number(lat) : null,
-    lng: lng !== undefined ? Number(lng) : null,
-    photo_url: photoDataUrl || null,
+    lat: lat !== undefined && lat !== null ? Number(lat) : null,
+    lng: lng !== undefined && lng !== null ? Number(lng) : null,
+    photo_url: resolvedPhotoUrl || null,
     is_demo: false,
     created_at: preserveClientTimestamp ? (createdAt || new Date().toISOString()) : new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -435,7 +474,11 @@ async function createIncident(userId, body, userRole = 'field', { preserveClient
   const supabase = getSupabaseClient();
   if (supabase) {
     const { error } = await supabase.from('incidents').insert(record);
-    if (error) console.warn('[Supabase] createIncident error:', error.message);
+    if (error) {
+      console.warn('[Supabase] createIncident error:', error.message);
+    } else {
+      console.log(`[Supabase] Successfully saved incident ${id} (photo: ${resolvedPhotoUrl ? 'attached' : 'none'})`);
+    }
   }
 
   // Sync with SQLite fallback
@@ -444,7 +487,7 @@ async function createIncident(userId, body, userRole = 'field', { preserveClient
       VALUES (@id,@userId,@nodeId,@road,@fromNode,@toNode,@category,@severity,@title,@description,@lat,@lng,@photoDataUrl,@status,@synced,@createdAt)`)
       .run({
         id,
-        userId,
+        userId: validReporterId || userId,
         nodeId: record.node_id,
         road: record.road,
         fromNode: fromNode || null,
@@ -955,6 +998,7 @@ module.exports = {
   // Logging
   logActivity,
   getActivityLogs,
+  toFrontendReport,
   CATEGORIES,
   SEVERITIES,
 };

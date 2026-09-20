@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { MapContainer, Polyline, Tooltip, CircleMarker, Marker, LayersControl, LayerGroup, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, Tooltip, Popup, CircleMarker, Marker, LayersControl, LayerGroup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../services/api';
@@ -7,6 +7,7 @@ import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES } from '../services/routeCal
 import { DRIVER_ROSTER } from '../services/driverService';
 import { useTranslation } from '../hooks/useTranslation';
 import MapTileLayer from './MapTileLayer';
+import IncidentPhotoModal from './IncidentPhotoModal';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
 
@@ -90,6 +91,7 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
   const [modeFilter, setModeFilter] = useState('all'); // all | road | railway | waterway | air
   const [tileError, setTileError] = useState(false);
   const [tileRetryKey, setTileRetryKey] = useState(0);
+  const [selectedPhotoIncident, setSelectedPhotoIncident] = useState(null);
 
   const handleRetryTiles = () => {
     setTileError(false);
@@ -271,6 +273,8 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
                   const iconColor = isResolved ? '#10b981' : isCritical ? '#ef4444' : isModerate ? '#f59e0b' : '#84cc16';
                   const reporter = inc.reporterRole === 'driver' ? 'Driver' : 'Field Officer';
 
+                  const photoSrc = inc.photoUrl || inc.photoDataUrl;
+
                   return (
                     <Marker
                       key={inc.id}
@@ -282,8 +286,8 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
                         iconAnchor: [13, 13],
                       })}
                     >
-                      <Tooltip sticky>
-                        <div style={{ maxWidth: 220, fontSize: 11 }}>
+                      <Popup>
+                        <div style={{ maxWidth: 220, fontSize: 11, padding: 2 }}>
                           <div style={{ fontWeight: 800, color: iconColor, fontSize: 12, marginBottom: 2 }}>
                             {inc.title}
                           </div>
@@ -300,9 +304,76 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
                           </div>
                           <div><b>Road/Corridor:</b> {inc.road || 'State Highway'}</div>
                           {inc.description && <div style={{ color: '#4b5563', margin: '3px 0' }}>{inc.description}</div>}
-                          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 3 }}>
+
+                          {photoSrc && (
+                            <div
+                              onClick={() => setSelectedPhotoIncident(inc)}
+                              style={{
+                                marginTop: 6,
+                                cursor: 'pointer',
+                                borderRadius: 6,
+                                overflow: 'hidden',
+                                border: '1px solid #d1d5db',
+                                position: 'relative'
+                              }}
+                              title="Click to view full photo evidence"
+                            >
+                              <img
+                                src={photoSrc}
+                                alt="Field evidence"
+                                style={{ width: '100%', height: 75, objectFit: 'cover', display: 'block' }}
+                                onError={(e) => {
+                                  e.target.style.display = 'none';
+                                  e.target.parentElement.innerHTML = '<div style="padding:6px;color:#ef4444;font-size:10px;text-align:center;">⚠️ Incident photo unavailable</div>';
+                                }}
+                              />
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  bottom: 2,
+                                  right: 2,
+                                  background: 'rgba(0,0,0,0.75)',
+                                  color: '#fff',
+                                  fontSize: 8,
+                                  padding: '1px 4px',
+                                  borderRadius: 3,
+                                  fontWeight: 700
+                                }}
+                              >
+                                🔍 Click to Enlarge
+                              </div>
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: 9, color: '#6b7280', marginTop: 4 }}>
                             <b>Reported:</b> {new Date(inc.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                           </div>
+
+                          {photoSrc && (
+                            <button
+                              onClick={() => setSelectedPhotoIncident(inc)}
+                              style={{
+                                marginTop: 6,
+                                width: '100%',
+                                padding: '4px 8px',
+                                background: '#155b4b',
+                                color: '#ffffff',
+                                border: 'none',
+                                borderRadius: 4,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              📷 View Ground Evidence Photo
+                            </button>
+                          )}
+                        </div>
+                      </Popup>
+                      <Tooltip sticky>
+                        <div style={{ fontSize: 11, fontWeight: 700 }}>
+                          {iconEmoji} {inc.title} ({inc.severity})
+                          {photoSrc ? ' 📷 [Photo Attached]' : ''}
                         </div>
                       </Tooltip>
                     </Marker>
@@ -469,6 +540,12 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
         <span className="legend-item"><i style={{ background: '#ef4444' }} />⚠️ Hazards ({incidents.length})</span>
         <span className="legend-stats">{t('map.activeDrivers') || '10 Active Drivers Tracked'}</span>
       </div>
+
+      <IncidentPhotoModal
+        isOpen={!!selectedPhotoIncident}
+        incident={selectedPhotoIncident}
+        onClose={() => setSelectedPhotoIncident(null)}
+      />
     </div>
   );
 }

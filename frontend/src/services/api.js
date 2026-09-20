@@ -118,6 +118,8 @@ export const api = {
   reports: () => request('/reports'),
   myReports: () => request('/reports/mine'),
   createReport: (payload) => request('/reports', { method: 'POST', body: payload }),
+  uploadPhoto: (incidentId, photoDataUrl, mimeType, fileName) =>
+    request('/reports/upload-photo', { method: 'POST', body: { incidentId, photoDataUrl, mimeType, fileName } }),
   syncReports: (reports) => request('/reports/sync', { method: 'POST', body: { reports } }),
   updateReportStatus: (id, status) => request(`/reports/${id}/status`, { method: 'PATCH', body: { status } }),
 

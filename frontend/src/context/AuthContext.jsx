@@ -19,9 +19,22 @@ export const USER_ROLES = [
 
 
 
+const DRIVER_UUIDS = [
+  '11111111-1111-4000-8000-000000000001',
+  '11111111-1111-4000-8000-000000000002',
+  '11111111-1111-4000-8000-000000000003',
+  '11111111-1111-4000-8000-000000000004',
+  '11111111-1111-4000-8000-000000000005',
+  '11111111-1111-4000-8000-000000000006',
+  '11111111-1111-4000-8000-000000000007',
+  '11111111-1111-4000-8000-000000000008',
+  '11111111-1111-4000-8000-000000000009',
+  '11111111-1111-4000-8000-000000000010',
+];
+
 export const DEMO_USERS = [
-  ...DRIVER_ROSTER.map((d) => ({
-    id: d.id,
+  ...DRIVER_ROSTER.map((d, i) => ({
+    id: DRIVER_UUIDS[i] || `11111111-1111-4000-8000-00000000000${(i + 1).toString(16)}`,
     name: d.name,
     email: d.email,
     role: 'driver',
@@ -32,7 +45,7 @@ export const DEMO_USERS = [
     phone: d.phone,
   })),
   {
-    id: 'u-priya',
+    id: '33333333-3333-4000-8000-000000000001',
     name: 'Priya Deka',
     email: 'priya@ner-sahayak.in',
     role: 'field',
@@ -42,7 +55,7 @@ export const DEMO_USERS = [
     phone: '+91 98765 43211',
   },
   {
-    id: 'u-rohan',
+    id: '22222222-2222-4000-8000-000000000001',
     name: 'Rohan Sharma',
     email: 'rohan@ner-sahayak.in',
     role: 'logistics',
@@ -52,7 +65,7 @@ export const DEMO_USERS = [
     phone: '+91 98765 43212',
   },
   {
-    id: 'u-ananya',
+    id: '44444444-4444-4000-8000-000000000001',
     name: 'Ananya Gogoi',
     email: 'ananya@ner-sahayak.in',
     role: 'official',
