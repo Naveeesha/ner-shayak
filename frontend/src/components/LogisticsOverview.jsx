@@ -43,7 +43,12 @@ export default function LogisticsOverview({ navigate, notify }) {
   useEffect(() => {
     load();
     const interval = setInterval(load, 30000);
-    return () => clearInterval(interval);
+    const handleIncident = () => load();
+    window.addEventListener('incident-created', handleIncident);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('incident-created', handleIncident);
+    };
   }, []);
 
   const openAssignModal = (shp) => {

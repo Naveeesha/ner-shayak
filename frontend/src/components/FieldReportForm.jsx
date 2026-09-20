@@ -18,6 +18,17 @@ const CATEGORIES = [
   { id: 'other', label: 'Other hazard' },
 ];
 
+function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 const SEVERITIES = ['minor', 'moderate', 'major', 'critical'];
 
 export default function FieldReportForm({ notify }) {
@@ -138,26 +149,18 @@ export default function FieldReportForm({ notify }) {
     setError('');
     setBusy(true);
 
-    const incidentId = `inc-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const incidentId = generateUUID();
     let uploadedPhotoUrl = null;
 
     // Upload to Supabase Storage before incident creation if online
-    if (photo) {
-      if (isOnline()) {
-        try {
-          const upRes = await api.uploadPhoto(incidentId, photo, 'image/jpeg', `${incidentId}.jpg`);
-          if (upRes && upRes.success && upRes.photoUrl) {
-            uploadedPhotoUrl = upRes.photoUrl;
-          } else {
-            setBusy(false);
-            setError('Photo upload failed. Please try again.');
-            return;
-          }
-        } catch (upErr) {
-          setBusy(false);
-          setError(`Photo upload failed. Please try again. (${upErr.message})`);
-          return;
+    if (photo && isOnline()) {
+      try {
+        const upRes = await api.uploadPhoto(incidentId, photo, 'image/jpeg', `${incidentId}.jpg`);
+        if (upRes && upRes.success && upRes.photoUrl) {
+          uploadedPhotoUrl = upRes.photoUrl;
         }
+      } catch (upErr) {
+        console.warn('[FieldReportForm] Standalone photo upload failed, embedding in payload:', upErr.message);
       }
     }
 
@@ -174,13 +177,18 @@ export default function FieldReportForm({ notify }) {
     try {
       if (isOnline()) {
         const res = await api.createReport(payload);
-        setAllReports((prev) => [res.report, ...prev]);
+        const savedReport = res?.report || { ...payload, synced: 1 };
+        setAllReports((prev) => [savedReport, ...prev.filter((r) => r.id !== savedReport.id)]);
         notify && notify('Incident report submitted and active across network.');
+        try {
+          window.dispatchEvent(new CustomEvent('incident-created', { detail: savedReport }));
+        } catch (_) {}
       } else {
         offlineQueue.add(payload);
         setQueued(offlineQueue.count());
         notify && notify('You are offline — report saved locally and will sync automatically.');
       }
+      setActiveTab('list');
       setForm({
         category: 'road_block',
         severity: 'moderate',

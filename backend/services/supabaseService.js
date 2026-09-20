@@ -423,7 +423,11 @@ async function createIncident(userId, body, userRole = 'field', { preserveClient
   if (!category || !CATEGORIES.includes(category)) throw new Error('Invalid or missing category');
   if (!title) throw new Error('Title is required');
 
-  const id = body.id || uuid();
+  // Sanitize incident ID: Ensure it is a valid UUID for PostgreSQL
+  let id = body.id;
+  if (!id || !UUID_REGEX.test(id)) {
+    id = uuid();
+  }
 
   // Sanitize reporter_id: Ensure it is a valid UUID for PostgreSQL
   let validReporterId = null;

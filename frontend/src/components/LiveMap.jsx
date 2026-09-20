@@ -121,12 +121,15 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
     const interval = setInterval(load, 30000);
     const handleOnline = () => setIsOfflineMode(false);
     const handleOffline = () => setIsOfflineMode(true);
+    const handleIncident = () => load();
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('incident-created', handleIncident);
     return () => {
       clearInterval(interval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('incident-created', handleIncident);
     };
   }, []);
 
