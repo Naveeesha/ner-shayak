@@ -9,6 +9,63 @@ import { useTranslation } from '../hooks/useTranslation';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
 
+// Ensure Leaflet default marker icons resolve reliably in production/WebView
+try {
+  delete L.Icon.Default.prototype._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+} catch (_) {}
+
+function MapResizer() {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Staged invalidations for WebView viewport settling
+    const t1 = setTimeout(() => map.invalidateSize({ debounceMoveEnd: true }), 100);
+    const t2 = setTimeout(() => map.invalidateSize({ debounceMoveEnd: true }), 350);
+    const t3 = setTimeout(() => map.invalidateSize({ debounceMoveEnd: true }), 700);
+    const t4 = setTimeout(() => map.invalidateSize({ debounceMoveEnd: true }), 1400);
+
+    const handleResize = () => {
+      map.invalidateSize({ debounceMoveEnd: true });
+    };
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    window.addEventListener('pageshow', handleResize);
+
+    // ResizeObserver on the map DOM container
+    let ro = null;
+    const container = map.getContainer();
+    if (typeof ResizeObserver !== 'undefined' && container) {
+      ro = new ResizeObserver(() => {
+        if (container.clientWidth > 0 && container.clientHeight > 0) {
+          map.invalidateSize({ debounceMoveEnd: true });
+        }
+      });
+      ro.observe(container);
+    }
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+      window.removeEventListener('pageshow', handleResize);
+      if (ro) ro.disconnect();
+    };
+  }, [map]);
+
+  return null;
+}
+
 function MapCenterer() {
   const map = useMap();
   useEffect(() => {
@@ -23,12 +80,11 @@ function MapCenterer() {
   return null;
 }
 
-export default function LiveMap({ height = 440, focusRouteEdges = null, activeRoute = null }) {
+export default function LiveMap({ height = null, focusRouteEdges = null, activeRoute = null }) {
   const { t } = useTranslation();
   const [nodes, setNodes] = useState(LOCAL_NODES);
   const [edges, setEdges] = useState(LOCAL_EDGES);
   const [incidents, setIncidents] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [modeFilter, setModeFilter] = useState('all'); // all | road | railway | waterway | air
 
@@ -102,10 +158,10 @@ export default function LiveMap({ height = 440, focusRouteEdges = null, activeRo
   const center = [25.5, 92.8]; // centered on North East India
 
   return (
-    <div style={{ position: 'relative', width: '100%', height, background: '#eaf4ee', borderRadius: 10, overflow: 'hidden', border: '1px solid #d4e5db' }}>
+    <div className="livemap-wrapper" style={{ height: height ? (typeof height === 'number' ? `${height}px` : height) : undefined }}>
       {/* Top Controls Bar */}
-      <div style={topControlsStyle}>
-        <div style={{ display: 'flex', gap: 4 }}>
+      <div className="livemap-top-bar" style={topControlsStyle}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           {['all', 'road', 'railway', 'waterway', 'air'].map(m => (
             <button
               key={m}
@@ -128,7 +184,7 @@ export default function LiveMap({ height = 440, focusRouteEdges = null, activeRo
           {isOfflineMode ? (t('map.offlineMode') || '🗺️ Offline Canvas Map') : (t('map.onlineMode') || '🌐 Tile Map (Online)')}
         </button>
 
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 9, fontWeight: 800, color: '#166534', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '4px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }}></span>
             {incidents.filter(i => i.status !== 'resolved').length} Active Hazards
@@ -142,15 +198,15 @@ export default function LiveMap({ height = 440, focusRouteEdges = null, activeRo
       {/* Map Content Rendering */}
       {!isOfflineMode ? (
         <MapContainer center={center} zoom={6} style={{ width: '100%', height: '100%' }} scrollWheelZoom>
+          <MapResizer />
           <MapCenterer />
           <LayersControl position="topright">
             <LayersControl.BaseLayer checked name="OpenStreetMap">
               <TileLayer
-                attribution='&copy; OpenStreetMap contributors'
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                eventHandlers={{
-                  tileerror: () => setIsOfflineMode(true),
-                }}
+                maxZoom={18}
+                minZoom={4}
               />
             </LayersControl.BaseLayer>
             
@@ -401,9 +457,22 @@ export default function LiveMap({ height = 440, focusRouteEdges = null, activeRo
   );
 }
 
-const topControlsStyle = { position: 'absolute', zIndex: 500, top: 10, left: 10, right: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 };
+const topControlsStyle = {
+  position: 'absolute',
+  zIndex: 500,
+  top: 8,
+  left: 8,
+  right: 8,
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  gap: 6,
+  flexWrap: 'wrap',
+  pointerEvents: 'auto',
+};
+
 const filterTabStyle = (active) => ({
-  padding: '6px 11px',
+  padding: '5px 9px',
   border: '1px solid #c8dbd0',
   borderRadius: 6,
   fontSize: 10,
@@ -411,6 +480,27 @@ const filterTabStyle = (active) => ({
   cursor: 'pointer',
   background: active ? '#175b4a' : 'rgba(255,255,255,0.92)',
   color: active ? '#ffffff' : '#1e3b32',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+  touchAction: 'manipulation',
 });
-const legendStyle = { position: 'absolute', zIndex: 500, bottom: 10, left: 10, right: 10, display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(255,255,255,0.94)', padding: '6px 12px', borderRadius: 6, fontSize: 10, fontWeight: 800, color: '#315449', flexWrap: 'wrap' };
+
+const legendStyle = {
+  position: 'absolute',
+  zIndex: 500,
+  bottom: 8,
+  left: 8,
+  right: 8,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  background: 'rgba(255,255,255,0.94)',
+  padding: '5px 10px',
+  borderRadius: 6,
+  fontSize: 9,
+  fontWeight: 800,
+  color: '#315449',
+  flexWrap: 'wrap',
+  maxHeight: 68,
+  overflowY: 'auto',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+};

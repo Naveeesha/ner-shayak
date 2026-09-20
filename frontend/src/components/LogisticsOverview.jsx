@@ -116,7 +116,7 @@ export default function LogisticsOverview({ navigate, notify }) {
       </section>
 
       {/* Shipment Metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
         <StatCard label={t('logistics.totalShipments') || 'TOTAL SHIPMENTS'} value={shipments.length} color="#176d55" />
         <StatCard label={t('logistics.inTransit') || 'IN TRANSIT'} value={inTransit} color="#2b765e" />
         <StatCard label={t('logistics.planned') || 'PLANNED / ASSIGNED'} value={planned} color="#bd7e22" />
@@ -192,9 +192,9 @@ export default function LogisticsOverview({ navigate, notify }) {
 
               return (
                 <div key={s.id} style={shipmentCardStyle(s.status)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#25483d' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: '#25483d', flexWrap: 'wrap', gap: 6 }}>
                     <b>{t(`enum.${s.originNode}`) || (s.originNode || 'GUWAHATI').toUpperCase()} → {t(`enum.${s.destinationNode}`) || (s.destinationNode || 'JORHAT').toUpperCase()}</b>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span style={statusPill(s.status)}>{t(`enum.${s.status}`) || s.status.replace('_', ' ').toUpperCase()}</span>
                       <select
                         value={s.status}
@@ -219,13 +219,13 @@ export default function LogisticsOverview({ navigate, notify }) {
                     <span>🚛 <b>Vehicle:</b> {linkedVehicle.vehicleNumber}</span>
                   </div>
 
-                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2ede6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed #e2ede6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ fontSize: 10, color: '#165744', fontWeight: 700 }}>
                       👤 {t('logistics.driver') || 'Driver'}: <b>{s.driverId ? assignedDriver.name : `${assignedDriver.name} (Assigned)`}</b>
                     </div>
                     <button
                       onClick={() => openAssignModal(s)}
-                      style={{ padding: '4px 9px', border: '1px solid #c0d8cb', borderRadius: 5, background: '#f0f9f4', color: '#176d55', fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                      style={{ padding: '5px 10px', border: '1px solid #c0d8cb', borderRadius: 5, background: '#f0f9f4', color: '#176d55', fontSize: 9, fontWeight: 800, cursor: 'pointer', marginLeft: 'auto' }}
                     >
                       {t('logistics.reassign') || 'Reassign Driver ➔'}
                     </button>

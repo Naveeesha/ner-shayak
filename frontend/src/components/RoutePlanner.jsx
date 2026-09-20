@@ -109,10 +109,15 @@ export default function RoutePlanner({ notify }) {
   });
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
+    <div className="planner-layout">
+      {/* Map display - on mobile appears at top, on desktop flows seamlessly */}
+      <div className="planner-map-slot">
+        <LiveMap height={360} focusRouteEdges={activeRoute?.edges} activeRoute={activeRoute} />
+      </div>
+
       {/* Route Form */}
-      <form onSubmit={plan} style={formStyle}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
+      <form onSubmit={plan} className="planner-form" style={formStyle}>
+        <div className="planner-form-row two-cols">
           <label style={labelStyle}>{t('route.origin') || 'Origin'}
             <select value={origin} onChange={(e) => setOrigin(e.target.value)} style={selectStyle}>
               {cityNodes.map((n) => <option key={n.id} value={n.id}>{t(`enum.${n.id}`) || n.name}, {t(`enum.${n.state}`) || n.state}</option>)}
@@ -125,7 +130,7 @@ export default function RoutePlanner({ notify }) {
           </label>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, width: '100%' }}>
+        <div className="planner-form-row three-cols">
           <label style={labelStyle}>{t('route.cargo') || 'Cargo Type'}
             <select value={cargoType} onChange={(e) => setCargoType(e.target.value)} style={selectStyle}>
               <option value="General Cargo">{t('cargo.general') || 'General Cargo'}</option>
@@ -160,13 +165,12 @@ export default function RoutePlanner({ notify }) {
         </div>
       </form>
 
-      {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700 }}>{error}</p>}
+      {error && <p style={{ color: '#b54a3c', fontSize: 12, fontWeight: 700, margin: '8px 0' }}>{error}</p>}
 
       {compareResult && compareResult.recommendation && activeRoute && (
-        <div style={{ display: 'grid', gap: 18 }}>
-          
+        <>
           {/* Recommendation Banner with Incident-Aware Routing terminology */}
-          <div style={recommendationBanner(emergencyMode)}>
+          <div className="planner-recommendation" style={recommendationBanner(emergencyMode)}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 22 }}>{emergencyMode ? '🚨' : '🧠'}</span>
@@ -195,7 +199,7 @@ export default function RoutePlanner({ notify }) {
 
           {/* Active Hazards Intersecting Corridor */}
           {routeIncidents.length > 0 && (
-            <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 8 }}>
+            <div className="planner-hazards" style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fef3c7', borderRadius: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                 <span style={{ fontSize: 16 }}>⚠️</span>
                 <b style={{ fontSize: 12, color: '#92400e' }}>Active Corridor Hazards Influencing Safety Index</b>
@@ -211,18 +215,15 @@ export default function RoutePlanner({ notify }) {
             </div>
           )}
 
-          {/* Map display */}
-          <LiveMap height={360} focusRouteEdges={activeRoute.edges} activeRoute={activeRoute} />
-
           {/* Multimodal Comparison Cards */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 0 0' }}>
+          <div className="planner-options-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 0 0', flexWrap: 'wrap', gap: 6 }}>
             <h4 style={{ fontSize: 13, color: '#374151', margin: 0, fontWeight: 800 }}>
               {t('route.availableOptions') || 'Available Multimodal Options (Risk-Weighted)'}
             </h4>
             <span style={{ fontSize: 11, color: '#6b7280' }}>Click any card to inspect path & segments</span>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <div className="multimodal-cards-container">
             <ModeCard
               mode="road"
               title={t('map.road') || "ROAD"}
@@ -267,7 +268,7 @@ export default function RoutePlanner({ notify }) {
 
           {/* Multimodal Transfer Points (if applicable) */}
           {activeRoute.transfers && activeRoute.transfers.length > 0 && (
-            <div style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+            <div className="planner-transfers" style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#334155', marginBottom: 6 }}>
                 🔄 Multimodal Transfer Nodes ({activeRoute.transfers.length})
               </div>
@@ -282,8 +283,8 @@ export default function RoutePlanner({ notify }) {
           )}
 
           {/* Route Segments for Selected Route */}
-          <div style={{ marginTop: 6 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <div className="planner-segments" style={{ marginTop: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
               <h4 style={{ fontSize: 12, color: '#39735f', margin: 0, fontWeight: 800 }}>
                 {selectedMode === compareResult.recommendation.mode 
                   ? (t('route.recommendedSegments') || 'RECOMMENDED ROUTE SEGMENTS & HAZARD STATUS')
@@ -296,8 +297,8 @@ export default function RoutePlanner({ notify }) {
 
             <div style={{ display: 'grid', gap: 6 }}>
               {(activeRoute.segments || activeRoute.edges || []).map((e, i) => (
-                <div key={i} style={segmentStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div key={i} className="route-segment-row" style={segmentStyle}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexWrap: 'wrap' }}>
                     <span style={modeBadgeStyle(e.mode)}>[{(e.mode || 'road').toUpperCase()}]</span>
                     <span style={{ fontWeight: 700 }}>
                       {t(`enum.${e.from.id}`) || e.from.name} → {t(`enum.${e.to.id}`) || e.to.name}
@@ -306,7 +307,7 @@ export default function RoutePlanner({ notify }) {
                   <span style={{ color: '#64748b' }}>
                     {e.corridor || e.road} · {e.distance || e.km} km {e.time ? `· ${formatMins(e.time)}` : ''}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: '#f1f5f9', color: '#475569' }}>
                       {e.safetyIndex || 95}% Safe
                     </span>
@@ -318,7 +319,7 @@ export default function RoutePlanner({ notify }) {
               ))}
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -47,12 +47,12 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
         <div style={{ padding: '14px 18px', maxHeight: '55vh', overflowY: 'auto', display: 'grid', gap: 10 }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: '#7a8d85', letterSpacing: 1.2 }}>{t('dash.registeredDrivers') || 'REGISTERED NORTH EAST DRIVERS (10 ROSTER)'}</div>
           {filtered.map((d) => (
-            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', border: '1px solid #e1ebe4', borderRadius: 9, background: '#fff' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #175b4a, #23745c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13 }}>
+            <div key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', border: '1px solid #e1ebe4', borderRadius: 9, background: '#fff', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg, #175b4a, #23745c)', color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 13, flex: '0 0 38px' }}>
                   {d.name.split(' ').map((n) => n[0]).join('')}
                 </div>
-                <div>
+                <div style={{ minWidth: 0 }}>
                   <b style={{ fontSize: 12, color: '#1e382f' }}>{d.name}</b>
                   <span style={{ marginLeft: 8, fontSize: 9, fontWeight: 800, color: '#176d55', background: '#e4f4eb', padding: '2px 6px', borderRadius: 4 }}>
                     {d.vehicleNumber}
@@ -68,7 +68,7 @@ export default function DriverAssignModal({ isOpen, onClose, targetItem, onDrive
 
               <button
                 onClick={() => handleAssign(d)}
-                style={{ padding: '7px 14px', border: 0, borderRadius: 6, background: '#1e745b', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                style={{ padding: '8px 14px', border: 0, borderRadius: 6, background: '#1e745b', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer', marginLeft: 'auto' }}
               >
                 {t('dash.assignDriverBtn') || 'Assign Driver'} ➔
               </button>

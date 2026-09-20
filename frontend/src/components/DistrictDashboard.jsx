@@ -74,7 +74,7 @@ export default function DistrictDashboard({ notify }) {
       </div>
 
       {/* Primary KPI Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
         <Stat label={t('dash.coverage') || "Network Coverage"} value={`${data?.regionAccessCoveragePct ?? 100}%`} tone="ok" />
         <Stat label="Active Incidents" value={data?.activeIncidents ?? data?.openFieldReports ?? 0} tone={data?.activeIncidents > 0 ? 'warning' : 'ok'} />
         <Stat label="Critical / Major" value={data?.criticalIncidents ?? data?.criticalReports ?? 0} tone={data?.criticalIncidents > 0 ? 'danger' : 'ok'} />
@@ -182,7 +182,7 @@ export default function DistrictDashboard({ notify }) {
       </div>
 
       {/* Shipment Pipeline Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
         <Stat label={t('dash.shipPlanned') || "Shipments Planned"} value={data?.shipments?.planned ?? 0} />
         <Stat label={t('dash.shipTransit') || "In Transit"} value={data?.shipments?.inTransit ?? 0} tone="ok" />
         <Stat label={t('dash.shipDelayed') || "Delayed"} value={data?.shipments?.delayed ?? 0} tone={data?.shipments?.delayed > 0 ? 'danger' : 'ok'} />

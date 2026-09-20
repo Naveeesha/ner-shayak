@@ -467,12 +467,12 @@ function Dashboard({ role, exit }) {
         )}
         <div className="top-actions">
           <button className="top-search-btn" onClick={() => setCmdOpen(true)} title="Quick Search (Ctrl+K)">
-            🔍 {t('navigation.search') || 'Search'} <kbd style={{ fontSize: 9, opacity: 0.8, marginLeft: 4 }}>Ctrl+K</kbd>
+            <span className="top-btn-icon">🔍</span> <span className="top-btn-label">{t('navigation.search') || 'Search'} <kbd style={{ fontSize: 9, opacity: 0.8, marginLeft: 4 }}>Ctrl+K</kbd></span>
           </button>
           <button className="top-theme-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle Night Mode">
-            {darkMode ? '☀️ Day Mode' : `🌙 ${t('navigation.nightMode') || 'Night Mode'}`}
+            <span className="top-btn-icon">{darkMode ? '☀️' : '🌙'}</span> <span className="top-btn-label">{darkMode ? 'Day Mode' : (t('navigation.nightMode') || 'Night Mode')}</span>
           </button>
-          <button className="ask" onClick={() => setAskModalOpen(true)}><Icon n="spark" s={16}/>{t('navigation.askSahayak') || 'Ask Sahayak'}</button>
+          <button className="ask" onClick={() => setAskModalOpen(true)} title="Ask Sahayak AI"><Icon n="spark" s={16}/><span className="top-btn-label">{t('navigation.askSahayak') || 'Ask Sahayak'}</span></button>
           <button className="notifications" onClick={() => { setRead(true); notify('All alerts marked as seen.'); }} aria-label="Mark alerts as seen"><Icon n="bell" s={18}/>{!read && <i/>}</button>
           <button className="top-avatar" onClick={() => navigate('Profile')} aria-label="Open profile">{initials}</button>
         </div>
