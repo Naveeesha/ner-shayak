@@ -369,7 +369,7 @@ function PageView({ page, role, notify, navigate }) {
         </div>
         <button className="back-tab-btn" onClick={() => navigate('Overview')}>← {t('navigation.backToOverview')}</button>
       </header>
-      {page === 'Live map' && <LiveMap height={520} />}
+      {page === 'Live map' && <LiveMap />}
       {page === 'Route planner' && <RoutePlanner notify={notify} />}
       {page === 'Alerts' && <AlertsList notify={notify} />}
       {page === 'Field reports' && <FieldReportForm notify={notify} />}

@@ -165,8 +165,8 @@ html, body {
 .livemap-wrapper {
   width: 100% !important;
   max-width: 100% !important;
-  height: 540px;
-  min-height: 350px;
+  height: 550px;
+  min-height: 360px;
   position: relative;
   overflow: hidden;
   border-radius: 9px;
@@ -177,7 +177,7 @@ html, body {
 .livemap-wrapper .leaflet-container {
   width: 100% !important;
   height: 100% !important;
-  min-height: 350px;
+  min-height: 360px;
   max-width: 100%;
   border-radius: 9px;
   touch-action: pan-x pan-y pinch-zoom;
@@ -210,6 +210,173 @@ html, body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Map Overlays and Floating Controls */
+.livemap-top-bar {
+  position: absolute;
+  z-index: 500;
+  top: 8px;
+  left: 52px;
+  right: 52px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.livemap-mode-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
+  padding: 3px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(200, 219, 208, 0.9);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  pointer-events: auto;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  white-space: nowrap;
+}
+
+.livemap-mode-chips button {
+  padding: 4px 8px;
+  border: 1px solid #c8dbd0;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.92);
+  color: #1e3b32;
+  transition: 0.15s;
+  flex: 0 0 auto;
+}
+
+.livemap-mode-chips button.active {
+  background: #175b4a;
+  color: #ffffff;
+  border-color: #175b4a;
+}
+
+.livemap-desktop-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.livemap-hazard-badge {
+  font-size: 9px;
+  font-weight: 800;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.livemap-hazard-badge .dot-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #16a34a;
+}
+
+.livemap-demo-badge {
+  font-size: 9px;
+  font-weight: 700;
+  color: #4b5563;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.livemap-legend {
+  position: absolute;
+  z-index: 500;
+  bottom: 22px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(4px);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #315449;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  border: 1px solid rgba(200, 219, 208, 0.8);
+  pointer-events: auto;
+  overflow-x: auto;
+  white-space: nowrap;
+  -webkit-overflow-scrolling: touch;
+}
+
+.livemap-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.livemap-legend .legend-item i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.livemap-legend .legend-stats {
+  margin-left: auto;
+  color: #7c8f87;
+  flex: 0 0 auto;
+}
+
+.map-tile-error-overlay {
+  position: absolute;
+  z-index: 900;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(24, 45, 38, 0.94);
+  backdrop-filter: blur(6px);
+  color: #ffffff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: auto;
+}
+
+.map-tile-error-overlay button {
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 6px;
+  background: #1e745b;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.15s;
+}
+
+.map-tile-error-overlay button:hover {
+  background: #278f71;
 }
 
 /* 3. Responsive Route Planner Elements */
@@ -340,7 +507,7 @@ html, body {
   }
 
   .livemap-wrapper {
-    height: 480px;
+    height: 450px !important;
     min-height: 420px;
   }
 
@@ -416,12 +583,48 @@ html, body {
   }
 
   .livemap-wrapper {
-    height: 400px;
-    min-height: 350px;
+    height: 360px !important;
+    min-height: 360px;
   }
 
   .livemap-wrapper .leaflet-container {
-    min-height: 350px;
+    min-height: 360px;
+  }
+
+  .livemap-top-bar {
+    left: 48px;
+    right: 48px;
+    top: 6px;
+    justify-content: flex-start;
+  }
+
+  .livemap-mode-chips {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 4px;
+    gap: 3px;
+  }
+
+  .livemap-mode-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .livemap-mode-chips button {
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .livemap-desktop-badges {
+    display: none !important;
+  }
+
+  .livemap-legend {
+    bottom: 20px;
+    padding: 3px 6px;
+    font-size: 8px;
+    gap: 6px;
   }
 
   .planner-form-row.two-cols,

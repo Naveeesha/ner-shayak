@@ -112,7 +112,7 @@ export default function RoutePlanner({ notify }) {
     <div className="planner-layout">
       {/* Map display - on mobile appears at top, on desktop flows seamlessly */}
       <div className="planner-map-slot">
-        <LiveMap height={360} focusRouteEdges={activeRoute?.edges} activeRoute={activeRoute} />
+        <LiveMap focusRouteEdges={activeRoute?.edges} activeRoute={activeRoute} />
       </div>
 
       {/* Route Form */}

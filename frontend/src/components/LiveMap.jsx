@@ -1,11 +1,12 @@
 import { useEffect, useState, useMemo } from 'react';
-import { MapContainer, TileLayer, Polyline, Tooltip, CircleMarker, Marker, LayersControl, LayerGroup, useMap } from 'react-leaflet';
+import { MapContainer, Polyline, Tooltip, CircleMarker, Marker, LayersControl, LayerGroup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import api from '../services/api';
 import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES } from '../services/routeCalculator';
 import { DRIVER_ROSTER } from '../services/driverService';
 import { useTranslation } from '../hooks/useTranslation';
+import MapTileLayer from './MapTileLayer';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
 
@@ -87,6 +88,13 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
   const [incidents, setIncidents] = useState([]);
   const [isOfflineMode, setIsOfflineMode] = useState(!navigator.onLine);
   const [modeFilter, setModeFilter] = useState('all'); // all | road | railway | waterway | air
+  const [tileError, setTileError] = useState(false);
+  const [tileRetryKey, setTileRetryKey] = useState(0);
+
+  const handleRetryTiles = () => {
+    setTileError(false);
+    setTileRetryKey(k => k + 1);
+  };
 
   const load = async () => {
     try {
@@ -160,37 +168,35 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
   return (
     <div className="livemap-wrapper" style={{ height: height ? (typeof height === 'number' ? `${height}px` : height) : undefined }}>
       {/* Top Controls Bar */}
-      <div className="livemap-top-bar" style={topControlsStyle}>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      <div className="livemap-top-bar">
+        <div className="livemap-mode-chips">
           {['all', 'road', 'railway', 'waterway', 'air'].map(m => (
             <button
               key={m}
+              type="button"
+              className={modeFilter === m ? 'active' : ''}
               onClick={() => setModeFilter(m)}
-              style={{
-                ...filterTabStyle(modeFilter === m),
-                padding: '4px 8px',
-                fontSize: 9,
-                textTransform: 'capitalize'
-              }}
             >
-              {m === 'all' ? 'All Modes' : m}
+              {m === 'all' ? (t('map.allModes') || 'All Modes') : m === 'road' ? `🚚 ${t('map.road') || 'Road'}` : m === 'railway' ? `🚂 ${t('map.rail') || 'Rail'}` : m === 'waterway' ? `🚢 ${t('map.water') || 'Water'}` : `✈️ ${t('map.air') || 'Air'}`}
             </button>
           ))}
+          <button
+            type="button"
+            className={isOfflineMode ? 'active' : ''}
+            onClick={() => setIsOfflineMode(!isOfflineMode)}
+            title="Toggle Offline Canvas"
+          >
+            {isOfflineMode ? '🗺️ Canvas' : '🌐 Tiles'}
+          </button>
         </div>
-        <button
-          onClick={() => setIsOfflineMode(!isOfflineMode)}
-          style={{ ...filterTabStyle(isOfflineMode), background: isOfflineMode ? '#175b4a' : '#ffffff', color: isOfflineMode ? '#ffffff' : '#175b4a' }}
-        >
-          {isOfflineMode ? (t('map.offlineMode') || '🗺️ Offline Canvas Map') : (t('map.onlineMode') || '🌐 Tile Map (Online)')}
-        </button>
 
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 9, fontWeight: 800, color: '#166534', background: '#dcfce7', border: '1px solid #bbf7d0', padding: '4px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a' }}></span>
+        <div className="livemap-desktop-badges">
+          <span className="livemap-hazard-badge">
+            <span className="dot-pulse"></span>
             {incidents.filter(i => i.status !== 'resolved').length} Active Hazards
           </span>
-          <span style={{ fontSize: 9, fontWeight: 700, color: '#4b5563', background: '#ffffff', border: '1px solid #d1d5db', padding: '4px 8px', borderRadius: 6 }}>
-            Demo Operational Data
+          <span className="livemap-demo-badge">
+            Operational Live
           </span>
         </div>
       </div>
@@ -200,13 +206,23 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
         <MapContainer center={center} zoom={6} style={{ width: '100%', height: '100%' }} scrollWheelZoom>
           <MapResizer />
           <MapCenterer />
+
+          {/* Tile error floating overlay */}
+          {tileError && (
+            <div className="map-tile-error-overlay">
+              <span>⚠️ {t('map.tilesUnavailable') || 'Map tiles temporarily unavailable'}</span>
+              <button onClick={handleRetryTiles} type="button">
+                🔄 {t('common.retry') || 'Retry'}
+              </button>
+            </div>
+          )}
+
           <LayersControl position="topright">
-            <LayersControl.BaseLayer checked name="OpenStreetMap">
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                maxZoom={18}
-                minZoom={4}
+            <LayersControl.BaseLayer checked name="CARTO Voyager">
+              <MapTileLayer
+                retryKey={tileRetryKey}
+                onTileError={() => setTileError(true)}
+                onTileLoad={() => setTileError(false)}
               />
             </LayersControl.BaseLayer>
             
@@ -445,62 +461,14 @@ export default function LiveMap({ height = null, focusRouteEdges = null, activeR
       )}
 
       {/* Legend footer */}
-      <div style={legendStyle}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, background: '#3ea274', borderRadius: '50%' }} />🚚 {t('map.road') || 'Road'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, background: '#475569', borderRadius: '50%' }} />🚂 {t('map.rail') || 'Rail (NFR)'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, background: '#0284c7', borderRadius: '50%' }} />🚢 {t('map.water') || 'Waterway (NW-2/16)'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, background: '#9333ea', borderRadius: '50%' }} />✈️ {t('map.air') || 'Air Cargo'}</span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><i style={{ width: 8, height: 8, background: '#ef4444', borderRadius: '50%' }} />⚠️ Hazards ({incidents.length})</span>
-        <span style={{ marginLeft: 'auto', color: '#7c8f87' }}>{t('map.activeDrivers') || '10 Active Drivers Tracked'}</span>
+      <div className="livemap-legend">
+        <span className="legend-item"><i style={{ background: '#3ea274' }} />🚚 {t('map.road') || 'Road'}</span>
+        <span className="legend-item"><i style={{ background: '#475569' }} />🚂 {t('map.rail') || 'Rail (NFR)'}</span>
+        <span className="legend-item"><i style={{ background: '#0284c7' }} />🚢 {t('map.water') || 'Waterway (NW-2/16)'}</span>
+        <span className="legend-item"><i style={{ background: '#9333ea' }} />✈️ {t('map.air') || 'Air Cargo'}</span>
+        <span className="legend-item"><i style={{ background: '#ef4444' }} />⚠️ Hazards ({incidents.length})</span>
+        <span className="legend-stats">{t('map.activeDrivers') || '10 Active Drivers Tracked'}</span>
       </div>
     </div>
   );
 }
-
-const topControlsStyle = {
-  position: 'absolute',
-  zIndex: 500,
-  top: 8,
-  left: 8,
-  right: 8,
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 6,
-  flexWrap: 'wrap',
-  pointerEvents: 'auto',
-};
-
-const filterTabStyle = (active) => ({
-  padding: '5px 9px',
-  border: '1px solid #c8dbd0',
-  borderRadius: 6,
-  fontSize: 10,
-  fontWeight: 800,
-  cursor: 'pointer',
-  background: active ? '#175b4a' : 'rgba(255,255,255,0.92)',
-  color: active ? '#ffffff' : '#1e3b32',
-  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-  touchAction: 'manipulation',
-});
-
-const legendStyle = {
-  position: 'absolute',
-  zIndex: 500,
-  bottom: 8,
-  left: 8,
-  right: 8,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  background: 'rgba(255,255,255,0.94)',
-  padding: '5px 10px',
-  borderRadius: 6,
-  fontSize: 9,
-  fontWeight: 800,
-  color: '#315449',
-  flexWrap: 'wrap',
-  maxHeight: 68,
-  overflowY: 'auto',
-  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
-};
