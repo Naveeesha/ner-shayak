@@ -1,0 +1,126 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{xcolor}
+\usepackage{tikz}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=teal,
+    citecolor=teal,
+    urlcolor=teal
+}
+
+\title{\textbf{NER-Sahayak: AI-Powered Multimodal Safety-Prioritized Routing \& Regional Intelligence Platform for North East India}}
+\author{\textbf{Team NER-Sahayak} \\ Department of Logistics \& Regional Intelligence \\ Dispur / Dispur Hub, Assam, India}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The North Eastern Region (NER) of India presents unique logistical challenges due to complex mountainous topography, severe seasonal monsoons, landslide vulnerability, and single-corridor connectivity via the Siliguri Corridor ("Chicken's Neck"). Standard shortest-path routing algorithms frequently guide logistics operators and emergency service convoys through active hazard zones, resulting in critical delivery delays and cargo loss. This paper presents \textbf{NER-Sahayak}, an end-to-end regional intelligence and multimodal logistics platform specifically engineered for the 8 North Eastern states. NER-Sahayak introduces a \textit{Safety-Prioritized Dijkstra Algorithm} that dynamically penalizes road and terrain hazard risks, preferring longer but verified safe corridors. Furthermore, the platform incorporates multimodal transport modes (Road, Northeast Frontier Railway, IWAI Inland Waterways NW-2/NW-16, and Air Cargo), a 10-driver active fleet assignment matrix, an offline high-fidelity SVG Canvas GIS map, and \textit{Ask Sahayak}---a resilient dual-tier AI conversational agent operating seamlessly across cloud endpoints and browser-native offline environments.
+\end{abstract}
+
+\section{Introduction \& System Overview}
+Logistical connectivity across North East India (Assam, Meghalaya, Nagaland, Manipur, Mizoram, Tripura, Arunachal Pradesh, and Sikkim) is severely constrained by seasonal monsoons, riverine inundation along the Brahmaputra and Barak river basins, and frequent hill-slope failures.
+
+\textbf{NER-Sahayak} addresses these challenges through five core pillars:
+\begin{enumerate}
+    \item \textbf{Safety-First Multimodal Routing:} Prioritizes road safety over raw distance or transit time.
+    \item \textbf{Multimodal Freight Network:} Integrates Highway Corridors (NH27, NH37, NH102), Northeast Frontier Railway (NFR) tracks, IWAI Waterways (NW-2 Brahmaputra and NW-16 Barak), and Air Freight hubs.
+    \item \textbf{Role-Based Intelligence Workspaces:} Personalized operational dashboards for Drivers, Field Officers, Logistics Operators, and Regional Government Officials.
+    \item \textbf{Ask Sahayak AI Conversational Engine:} Real-time logistics, arithmetic, route safety, and regional hazard response intelligence.
+    \item \textbf{Offline-First Canvas GIS:} Dual-rendering Leaflet tile map and zero-dependency SVG vector canvas map ensuring continuous situational awareness during internet blackouts.
+\end{enumerate}
+
+\section{Mathematical Formulation: Safety-First Dijkstra Routing}
+Let the multimodal transport network be represented as a weighted directed graph $G = (V, E)$, where $V$ represents regional nodes (hubs, district headquarters, river ports, and airports) and $E$ represents transport edges (road segments, rail tracks, waterway corridors, air paths).
+
+\subsection{Dynamic Edge Weight Calculation}
+Traditional routing minimizes total physical distance $D(e)$ for an edge $e \in E$:
+\begin{equation}
+    W_{\text{traditional}}(e) = D(e)
+\end{equation}
+
+In \textbf{NER-Sahayak}, the effective weight $W_{\text{safety}}(e)$ is dynamically modulated by a risk factor $R(e) \in [0, 100]$, weather multiplier $\gamma_w \ge 1.0$, and transport mode factor $\mu_m$:
+
+\begin{equation}
+    W_{\text{safety}}(e) = D(e) \cdot \left( 1 + \alpha \cdot \left(\frac{R(e)}{100}\right)^\beta \right) \cdot \gamma_w \cdot \mu_m
+\end{equation}
+
+Where:
+\begin{itemize}
+    \item $\alpha \ge 0$ is the safety penalty multiplier (default $\alpha = 3.5$).
+    \item $\beta \ge 1.0$ is the exponential hazard scaling exponent (default $\beta = 2.0$), ensuring severe disruptions receive prohibitive weight penalties.
+    \item $\gamma_w$ represents weather severity:
+    \begin{equation}
+        \gamma_w = \begin{cases} 
+        1.0 & \text{Clear / Normal} \\
+        1.35 & \text{Moderate Rain / Fog} \\
+        2.50 & \text{Heavy Monsoon / Flash Flood Watch} \\
+        10.0 & \text{Active Landslide / Road Closure}
+        \end{cases}
+    \end{equation}
+    \item $\mu_m$ scales transport mode preference based on user filter ($m \in \{\text{Road}, \text{Railway}, \text{Waterway}, \text{Air}\}$).
+\end{itemize}
+
+\subsection{Safety Index Formulation}
+For a computed route $P = (e_1, e_2, \dots, e_k)$, the aggregate \textbf{Safety Index} $S(P) \in [0, 100\%]$ is calculated as:
+
+\begin{equation}
+    S(P) = 100 \cdot \prod_{i=1}^{k} \left( 1 - \frac{R(e_i)}{100} \right)^{\frac{D(e_i)}{\sum D(e)}}
+\end{equation}
+
+If $S(P) < 65\%$, the system automatically triggers an \textit{Alternate Safety Route} recommendation and routes an approval request to the Logistics Operations team.
+
+\section{System Architecture \& Multimodal Network}
+
+\begin{table}[h]
+\centering
+\caption{Multimodal Freight Network Summary}
+\label{tab:network}
+\begin{tabular}{llll}
+\toprule
+\textbf{Transport Mode} & \textbf{Key Corridors} & \textbf{Primary Nodes} & \textbf{Resilience Characteristic} \\
+\midrule
+Road & NH27, NH37, NH102 & Guwahati, Shillong, Silchar, Kohima & High flexibility, monsoon vulnerable \\
+Railway & NFR Mainline, Lumding-Badarpur & Guwahati, Dimapur, Agartala & Bulk cargo, high throughput \\
+Waterway & IWAI NW-2, NW-16 & Dhubri, Pandu, Silchar & Flood resilient, economical \\
+Air Cargo & LGBI, Lengpui, Bir Tikendrajit & Guwahati, Aizawl, Imphal & High speed, medical/emergency \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Ask Sahayak AI \& Dual-Tier Fallback}
+The conversational assistant \textbf{Ask Sahayak} operates using a dual-tier execution architecture:
+
+\begin{algorithm}[H]
+\caption{Ask Sahayak Query Processor}
+\begin{algorithmic}[1]
+\State \textbf{Input:} User Query String $Q$, User Context $C$
+\State \textbf{Output:} Intelligence Response String $R$
+\If{$Q$ matches arithmetic pattern $(\text{num}_1 \, \text{op} \, \text{num}_2)$}
+    \State \Return EvaluateMathExpression($Q$)
+\EndIf
+\Try
+    \State $R \gets \text{FetchCloudAIResponse}(Q, C)$
+    \State \Return $R$
+\Catch{\text{NetworkError or Timeout}}
+    \State $R \gets \text{GenerateBrowserLocalAIResponse}(Q, C)$
+    \State \Return $R$
+\EndTry
+\end{algorithmic}
+\end{algorithm}
+
+\section{Conclusion \& Future Work}
+\textbf{NER-Sahayak} demonstrates that integrating safety-first Dijkstra optimization, multimodal freight routing (Road, Rail, Waterway, Air), and offline-first client-side architecture dramatically improves supply chain resilience across North East India. Future enhancements include satellite radar imagery integration for automated landslide detection and predictive monsoon route planning.
+
+\end{document}

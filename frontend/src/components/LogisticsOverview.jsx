@@ -36,10 +36,10 @@ export default function LogisticsOverview({ navigate, notify }) {
 
   const openAssignModal = (shp) => {
     setSelectedShipment({
-      id: shp.id,
-      title: `Shipment #${shp.id.slice(0, 7)}`,
-      origin: shp.originNode.toUpperCase(),
-      dest: shp.destinationNode.toUpperCase(),
+      id: shp?.id || 'generic',
+      title: shp ? `Shipment #${shp.id.slice(0, 7)}` : 'Cargo Shipment',
+      origin: (shp?.originNode || 'Origin').toUpperCase(),
+      dest: (shp?.destinationNode || 'Destination').toUpperCase(),
     });
     setAssignModalOpen(true);
   };
@@ -70,7 +70,7 @@ export default function LogisticsOverview({ navigate, notify }) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setAssignModalOpen(true)} style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>
+            <button onClick={() => openAssignModal(null)} style={{ padding: '9px 15px', border: '1px solid rgba(255,255,255,0.3)', borderRadius: 7, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>
               👤 Assign Driver (10 Roster)
             </button>
             <button onClick={() => navigate('Route planner')} style={{ padding: '9px 15px', border: 0, borderRadius: 7, background: '#ccf363', color: '#12483a', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}>

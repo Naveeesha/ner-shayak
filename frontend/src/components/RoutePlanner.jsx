@@ -158,8 +158,8 @@ export default function RoutePlanner({ notify }) {
             <div style={{ display: 'grid', gap: 6 }}>
               {compareResult.recommendation.route.edges.map((e, i) => (
                 <div key={i} style={segmentStyle}>
-                  <span style={{ fontWeight: 700 }}>{e.from.name} → {e.to.name}</span>
-                  <span style={{ color: '#7c8f87' }}>[{e.mode.toUpperCase()}] {e.road} · {e.km} km</span>
+                  <span style={{ fontWeight: 700 }}>{e.from?.name || e.from} → {e.to?.name || e.to}</span>
+                  <span style={{ color: '#7c8f87' }}>[{(e.mode || 'road').toUpperCase()}] {e.road} · {e.km} km</span>
                   <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
                     {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution' : '🔴 Disrupted'}
                   </span>
