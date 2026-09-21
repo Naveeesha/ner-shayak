@@ -501,8 +501,6 @@ function Dashboard({ role, exit }) {
   </div>;
 }
 
-const DEFAULT_SUMMARY = { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3 };
-
 function RegionStrip({ navigate }) {
   const { t } = useTranslation();
   const [summary, setSummary] = useState(null);

@@ -4,7 +4,6 @@ import { useTranslation } from '../hooks/useTranslation';
 
 export default function DriverAssignModal({ isOpen, onClose, targetItem, onDriverAssigned, notify }) {
   const { t } = useTranslation();
-  const [selectedDriverId, setSelectedDriverId] = useState('');
   const [search, setSearch] = useState('');
 
   if (!isOpen) return null;
