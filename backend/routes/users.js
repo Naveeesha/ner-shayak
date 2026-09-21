@@ -1,6 +1,6 @@
 const express = require('express');
-const db = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
@@ -11,35 +11,29 @@ function toPublicUser(u) {
 }
 
 // GET /api/users — directory of every registered account (Official/Admin only)
-router.get('/', requireAuth, requireRole('official'), (req, res) => {
-  const { role, state, search } = req.query;
-  let sql = 'SELECT * FROM users WHERE 1=1';
-  const params = [];
-  if (role) { sql += ' AND role = ?'; params.push(role); }
-  if (state) { sql += ' AND state = ?'; params.push(state); }
-  if (search) {
-    sql += ' AND (name LIKE ? OR email LIKE ? OR organisation LIKE ? OR district LIKE ?)';
-    const like = `%${search}%`;
-    params.push(like, like, like, like);
+router.get('/', requireAuth, requireRole('official'), async (req, res) => {
+  try {
+    const { role, state, search } = req.query;
+    const { users, total, byRole } = await supabaseService.listUsers({ role, state, search });
+    res.json({ users: users.map(toPublicUser), total, byRole });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to list users', detail: err.message });
   }
-  sql += ' ORDER BY createdAt DESC';
-  const users = db.prepare(sql).all(...params).map(toPublicUser);
-
-  const counts = db.prepare('SELECT role, COUNT(*) c FROM users GROUP BY role').all();
-  const byRole = Object.fromEntries(counts.map((r) => [r.role, r.c]));
-
-  res.json({ users, total: users.length, byRole });
 });
 
 // GET /api/users/:id — full detail on one account (official only)
-router.get('/:id', requireAuth, requireRole('official'), (req, res) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({ user: toPublicUser(user) });
+router.get('/:id', requireAuth, requireRole('official'), async (req, res) => {
+  try {
+    const user = await supabaseService.getUserById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: toPublicUser(user) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user', detail: err.message });
+  }
 });
 
 // PATCH /api/users/:id — update user details (Official/Admin only)
-router.patch('/:id', requireAuth, requireRole('official'), (req, res) => {
+router.patch('/:id', requireAuth, requireRole('official'), async (req, res) => {
   const allowed = ['name', 'phone', 'role', 'organisation', 'vehicleNumber', 'state', 'district', 'language', 'hub', 'department'];
   const updates = {};
   allowed.forEach((k) => { if (req.body[k] !== undefined) updates[k] = req.body[k]; });
@@ -49,27 +43,32 @@ router.patch('/:id', requireAuth, requireRole('official'), (req, res) => {
     return res.status(400).json({ error: 'Invalid role' });
   }
 
-  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'User not found' });
+  try {
+    const existing = await supabaseService.getUserById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'User not found' });
 
-  const setClause = Object.keys(updates).map((k) => `${k} = @${k}`).join(', ');
-  db.prepare(`UPDATE users SET ${setClause} WHERE id = @id`).run({ ...updates, id: req.params.id });
-
-  const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  res.json({ user: toPublicUser(updated) });
+    const updated = await supabaseService.updateUser(req.params.id, updates);
+    res.json({ user: toPublicUser(updated) });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update user', detail: err.message });
+  }
 });
 
 // DELETE /api/users/:id — delete a user account (Official/Admin only)
-router.delete('/:id', requireAuth, requireRole('official'), (req, res) => {
+router.delete('/:id', requireAuth, requireRole('official'), async (req, res) => {
   if (req.user.id === req.params.id) {
     return res.status(400).json({ error: 'You cannot delete your own account from the directory.' });
   }
 
-  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'User not found' });
+  try {
+    const existing = await supabaseService.getUserById(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'User not found' });
 
-  db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-  res.json({ ok: true, deletedId: req.params.id });
+    await supabaseService.deleteUser(req.params.id);
+    res.json({ ok: true, deletedId: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete user', detail: err.message });
+  }
 });
 
 module.exports = router;

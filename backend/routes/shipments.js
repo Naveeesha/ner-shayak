@@ -1,18 +1,19 @@
 const express = require('express');
-const { v4: uuid } = require('uuid');
-const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { findRoute } = require('../utils/dijkstra');
 const { fetchNodeWeather } = require('./weather');
 const { NODES } = require('../data/nerNetwork');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
-router.get('/', requireAuth, (req, res) => {
-  const rows = req.user.role === 'logistics'
-    ? db.prepare('SELECT * FROM shipments WHERE createdBy = ? ORDER BY createdAt DESC').all(req.user.id)
-    : db.prepare('SELECT * FROM shipments ORDER BY createdAt DESC LIMIT 100').all();
-  res.json({ shipments: rows.map((r) => ({ ...r, route: r.routeJson ? JSON.parse(r.routeJson) : null })) });
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const shipments = await supabaseService.getShipments(req.user.id, req.user.role);
+    res.json({ shipments });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch shipments', detail: err.message });
+  }
 });
 
 router.post('/', requireAuth, async (req, res) => {
@@ -24,60 +25,55 @@ router.post('/', requireAuth, async (req, res) => {
     await Promise.all(NODES.map(async (n) => {
       try { weatherSeverityByNode[n.id] = (await fetchNodeWeather(n)).severity; } catch (_) { weatherSeverityByNode[n.id] = 0; }
     }));
-    const route = findRoute(originNode, destinationNode, { weatherSeverityByNode });
+    const disruptions = await supabaseService.getActiveDisruptions();
+    const route = findRoute(originNode, destinationNode, { weatherSeverityByNode, disruptions });
     if (!route) return res.status(422).json({ error: 'No viable route for this shipment right now' });
 
-    const shipment = {
-      id: uuid(),
+    const shipment = await supabaseService.createShipment(req.user.id, {
       vehicleId: vehicleId || null,
-      createdBy: req.user.id,
       originNode,
       destinationNode,
       cargoType: cargoType || 'General cargo',
       priority,
-      status: 'planned',
-      routeJson: JSON.stringify(route),
-      etaMinutes: route.etaMinutes,
-      createdAt: new Date().toISOString(),
-    };
-    db.prepare(`INSERT INTO shipments (id,vehicleId,createdBy,originNode,destinationNode,cargoType,priority,status,routeJson,etaMinutes,createdAt)
-      VALUES (@id,@vehicleId,@createdBy,@originNode,@destinationNode,@cargoType,@priority,@status,@routeJson,@etaMinutes,@createdAt)`).run(shipment);
+      route,
+    });
 
-    res.status(201).json({ shipment: { ...shipment, route } });
+    res.status(201).json({ shipment });
   } catch (err) {
     res.status(500).json({ error: 'Failed to plan shipment', detail: err.message });
   }
 });
 
-router.patch('/:id/status', requireAuth, (req, res) => {
+router.patch('/:id/status', requireAuth, async (req, res) => {
   const { status } = req.body || {};
-  if (!['planned', 'in_transit', 'delivered', 'delayed', 'cancelled'].includes(status)) {
+  if (!['planned', 'in_transit', 'delivered', 'delayed', 'cancelled', 'assigned', 'loading'].includes(status)) {
     return res.status(400).json({ error: 'Invalid status' });
   }
-  const existing = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Shipment not found' });
-  if (req.user.role !== 'official' && existing.createdBy !== req.user.id) {
-    return res.status(403).json({ error: 'You do not have permission to update this shipment' });
+
+  try {
+    const result = await supabaseService.updateShipmentStatus(req.params.id, req.user.id, req.user.role, status);
+    if (result.notFound) return res.status(404).json({ error: 'Shipment not found' });
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to update this shipment' });
+
+    res.json({ shipment: result.shipment });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update shipment status', detail: err.message });
   }
-  db.prepare('UPDATE shipments SET status = ? WHERE id = ?').run(status, req.params.id);
-  const row = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
-  res.json({ shipment: { ...row, route: row.routeJson ? JSON.parse(row.routeJson) : null } });
 });
 
-router.patch('/:id/assign', requireAuth, (req, res) => {
+router.patch('/:id/assign', requireAuth, async (req, res) => {
   const { driverId } = req.body || {};
   if (!driverId) return res.status(400).json({ error: 'driverId is required' });
 
-  const existing = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Shipment not found' });
-  
-  if (req.user.role !== 'official' && req.user.role !== 'logistics') {
-    return res.status(403).json({ error: 'You do not have permission to assign drivers' });
-  }
+  try {
+    const result = await supabaseService.assignDriverToShipment(req.params.id, req.user.id, req.user.role, driverId);
+    if (result.notFound) return res.status(404).json({ error: 'Shipment not found' });
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to assign drivers' });
 
-  db.prepare('UPDATE shipments SET driverId = ? WHERE id = ?').run(driverId, req.params.id);
-  const row = db.prepare('SELECT * FROM shipments WHERE id = ?').get(req.params.id);
-  res.json({ shipment: { ...row, route: row.routeJson ? JSON.parse(row.routeJson) : null } });
+    res.json({ shipment: result.shipment });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to assign driver', detail: err.message });
+  }
 });
 
 module.exports = router;

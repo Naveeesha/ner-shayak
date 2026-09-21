@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useAuth, LANGUAGES } from '../context/AuthContext';
+import { useTranslation } from '../hooks/useTranslation';
 import api from '../services/api';
 import { offlineQueue, isOnline } from '../services/offlineQueue';
 
 export default function SettingsPanel({ notify }) {
   const { user, updateProfile } = useAuth();
+  const { t } = useTranslation();
   const [language, setLanguage] = useState(user.language || 'en');
   const [busy, setBusy] = useState(false);
   const [queued] = useState(offlineQueue.count());
@@ -13,7 +15,7 @@ export default function SettingsPanel({ notify }) {
     setBusy(true);
     try {
       await updateProfile({ language });
-      notify && notify('Alert language updated.');
+      notify && notify(t('settings.langSuccess') || 'Alert language updated.');
     } catch (err) {
       notify && notify(`Could not save: ${err.message}`);
     } finally {
@@ -36,27 +38,27 @@ export default function SettingsPanel({ notify }) {
   return (
     <div style={{ display: 'grid', gap: 20, maxWidth: 480 }}>
       <div>
-        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>Alert language</h4>
+        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>{t('settings.alertLanguage') || 'Alert language'}</h4>
         <div style={{ display: 'flex', gap: 10 }}>
           <select value={language} onChange={(e) => setLanguage(e.target.value)} style={inputStyle}>
             {LANGUAGES.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
           </select>
-          <button onClick={save} disabled={busy} style={btnStyle}>Save</button>
+          <button onClick={save} disabled={busy} style={btnStyle}>{t('settings.save') || 'Save'}</button>
         </div>
       </div>
 
       <div>
-        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>Network status</h4>
+        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>{t('settings.networkStatus') || 'Network status'}</h4>
         <p style={{ fontSize: 12, color: '#7c8f87' }}>
-          You are currently <b style={{ color: isOnline() ? '#1e745b' : '#b5493a' }}>{isOnline() ? 'online' : 'offline'}</b>.
-          {queued > 0 && ` ${queued} field report(s) are queued locally.`}
+          {t('settings.onlineStatusPrefix') || 'You are currently '} <b style={{ color: isOnline() ? '#1e745b' : '#b5493a' }}>{isOnline() ? (t('settings.online') || 'online') : (t('settings.offline') || 'offline')}</b>.
+          {queued > 0 && ` ${queued} ${t('settings.queuedReports') || 'field report(s) are queued locally.'}`}
         </p>
-        {queued > 0 && <button onClick={syncNow} disabled={busy} style={btnStyle}>Sync now</button>}
+        {queued > 0 && <button onClick={syncNow} disabled={busy} style={btnStyle}>{t('report.syncNow') || 'Sync now'}</button>}
       </div>
 
       <div>
-        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>Account</h4>
-        <p style={{ fontSize: 12, color: '#7c8f87' }}>Signed in as <b>{user.email}</b> · role: <b style={{ textTransform: 'capitalize' }}>{user.role}</b></p>
+        <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8 }}>{t('settings.account') || 'Account'}</h4>
+        <p style={{ fontSize: 12, color: '#7c8f87' }}>{t('settings.signedInAs') || 'Signed in as'} <b>{user.email}</b> · {t('settings.role') || 'role'}: <b style={{ textTransform: 'capitalize' }}>{t(`enum.${user.role}`) || user.role}</b></p>
       </div>
     </div>
   );

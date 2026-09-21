@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { generateBrowserAIResponse } from '../services/askLocalFallback';
+import { useTranslation } from '../hooks/useTranslation';
 
 
 function renderMarkdown(text) {
@@ -40,6 +41,7 @@ function speakText(text) {
 }
 
 export default function AskSahayakModal({ isOpen, onClose }) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -52,13 +54,13 @@ export default function AskSahayakModal({ isOpen, onClose }) {
       setMessages([
         {
           sender: 'ai',
-          text: `Hello **${user.name}**! I am **Ask Sahayak**, your AI assistant for logistics, route safety, and regional intelligence across North East India.\n\n` +
-            `How can I help you in your **${user.role.toUpperCase()}** workspace today?`,
+          text: `${t('sahayak.hello') || 'Hello'} **${user.name}**! ${t('sahayak.intro1') || 'I am **Ask Sahayak**, your AI assistant for logistics, route safety, and regional intelligence across North East India.'}\n\n` +
+            `${t('sahayak.intro2') || 'How can I help you in your'} **${user.role.toUpperCase()}** ${t('sahayak.intro3') || 'workspace today?'}`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     }
-  }, [isOpen, messages.length, user]);
+  }, [isOpen, messages.length, user, t]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -113,11 +115,11 @@ export default function AskSahayakModal({ isOpen, onClose }) {
   };
 
   const suggestions = [
-    'Safest route Guwahati to Shillong',
-    'Check weather near Nagaon',
-    'Active landslide & flood reports',
-    'My workspace status',
-    'Emergency helpline numbers',
+    t('sahayak.sug1') || 'Safest route Guwahati to Shillong',
+    t('sahayak.sug2') || 'Check weather near Nagaon',
+    t('sahayak.sug3') || 'Active landslide & flood reports',
+    t('sahayak.sug4') || 'My workspace status',
+    t('sahayak.sug5') || 'Emergency helpline numbers',
   ];
 
   return (
@@ -127,14 +129,14 @@ export default function AskSahayakModal({ isOpen, onClose }) {
           <div className="ask-modal-title">
             <div className="ask-avatar-icon">✦</div>
             <div>
-              <h3>Ask Sahayak AI</h3>
+              <h3>{t('sahayak.title') || 'Ask Sahayak AI'}</h3>
               <div className="ask-status">
                 <span className="dot-live" />
                 <span>{modeBadge}</span>
               </div>
             </div>
           </div>
-          <button className="ask-close-btn" onClick={onClose} aria-label="Close Ask Sahayak">✕</button>
+          <button className="ask-close-btn" onClick={onClose} aria-label={t('common.close') || 'Close'}>✕</button>
         </header>
 
         <div className="ask-modal-suggestions">
@@ -150,11 +152,11 @@ export default function AskSahayakModal({ isOpen, onClose }) {
             <div key={idx} className={`ask-bubble-wrapper ${m.sender}`}>
               <div className="ask-bubble">
                 <div className="ask-bubble-meta">
-                  <span>{m.sender === 'user' ? user?.name || 'You' : 'Ask Sahayak'}</span>
+                  <span>{m.sender === 'user' ? user?.name || t('sahayak.you') || 'You' : t('sahayak.title') || 'Ask Sahayak'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {m.sender === 'ai' && (
-                      <button onClick={() => speakText(m.text)} className="speech-btn" title="Listen to answer">
-                        🔊 Listen
+                      <button onClick={() => speakText(m.text)} className="speech-btn" title={t('sahayak.listen') || 'Listen to answer'}>
+                        🔊 {t('sahayak.listenBtn') || 'Listen'}
                       </button>
                     )}
                     <time>{m.time}</time>
@@ -172,7 +174,7 @@ export default function AskSahayakModal({ isOpen, onClose }) {
                 <div className="typing-indicator">
                   <span /><span /><span />
                 </div>
-                <span className="loading-text">Analyzing network & live weather data…</span>
+                <span className="loading-text">{t('sahayak.analyzing') || 'Analyzing network & live weather data…'}</span>
               </div>
             </div>
           )}
@@ -183,14 +185,14 @@ export default function AskSahayakModal({ isOpen, onClose }) {
           <form onSubmit={(e) => { e.preventDefault(); handleSend(); }}>
             <input
               type="text"
-              placeholder="Ask about routes, weather, active landslides, cargo..."
+              placeholder={t('sahayak.placeholder') || 'Ask about routes, weather, active landslides, cargo...'}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={loading}
               autoFocus
             />
             <button type="submit" disabled={!input.trim() || loading}>
-              Send ➔
+              {t('sahayak.send') || 'Send ➔'}
             </button>
           </form>
         </footer>

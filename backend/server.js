@@ -16,11 +16,13 @@ const i18nRoutes = require('./routes/i18n');
 const userRoutes = require('./routes/users');
 const askRoutes = require('./routes/ask');
 
+const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
-app.use(express.json({ limit: '8mb' })); // generous limit for geo-tagged photo uploads (base64)
+app.use(express.json({ limit: '25mb' })); // High limit for mobile photo uploads
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', service: 'ner-sahayak-backend', time: new Date().toISOString() });

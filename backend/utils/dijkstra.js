@@ -27,11 +27,25 @@ function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {})
   const weatherMultiplier = 1 + Math.pow(weatherSeverity, 2) * 8.0;
 
   // Active field disruption reports (landslide, flood, bridge damage)
-  const relevant = disruptions.filter(
-    (d) => (d.fromNode === edge.from && d.toNode === edge.to) ||
-           (d.fromNode === edge.to && d.toNode === edge.from) ||
-           d.road === edge.road
-  );
+  const relevant = disruptions.filter((d) => {
+    // If road is specified, match road name
+    if (d.road && edge.road && d.road.toLowerCase().trim() === edge.road.toLowerCase().trim()) {
+      return true;
+    }
+    // If fromNode and toNode match
+    if (d.fromNode && d.toNode) {
+      const matchEndpoints = (d.fromNode === edge.from && d.toNode === edge.to) || 
+                             (d.fromNode === edge.to && d.toNode === edge.from);
+      if (matchEndpoints) {
+        // If disruption specifies a road (like NH27), and this edge is a railway/waterway line, do NOT cross-pollinate
+        if (d.road && edge.road && d.road.toUpperCase() !== edge.road.toUpperCase() && edge.mode !== 'road') {
+          return false;
+        }
+        return true;
+      }
+    }
+    return false;
+  });
   let disruptionMultiplier = 1;
   let blocked = false;
   relevant.forEach((d) => {
@@ -50,7 +64,10 @@ function edgeWeight(edge, { weatherSeverityByNode = {}, disruptions = [] } = {})
 }
 
 /**
- * Safety-Prioritized Dijkstra Algorithm.
+ * Safety-Prioritized Dijkstra Algorithm with Multimodal Stage Support.
+ * For target modes ('railway', 'waterway', 'air'):
+ * Guarantees the multimodal transfer pattern:
+ * Origin -> (first-mile road) -> Target Mode Trunk -> (last-mile road) -> Destination
  * Returns route with safety index, total km, ETA, and segment conditions.
  */
 function findRoute(startId, endId, context = {}) {
@@ -59,109 +76,292 @@ function findRoute(startId, endId, context = {}) {
     throw new Error('Unknown start or end location');
   }
 
+  const targetMode = context.mode;
+  const isMultimodalTarget = targetMode && targetMode !== 'all' && targetMode !== 'road';
+
+  const nodeMap = Object.fromEntries(NODES.map((n) => [n.id, n]));
+
+  // -------------------------------------------------------------------------
+  // 1. STANDARD SINGLE-STAGE ROUTING (for 'all' or 'road')
+  // -------------------------------------------------------------------------
+  if (!isMultimodalTarget) {
+    const dist = {};
+    const prevEdge = {};
+    const queue = new Set(Object.keys(graph));
+    Object.keys(graph).forEach((id) => { dist[id] = Infinity; });
+    dist[startId] = 0;
+
+    while (queue.size) {
+      let u = null;
+      let best = Infinity;
+      for (const id of queue) {
+        if (dist[id] < best) { best = dist[id]; u = id; }
+      }
+      if (u === null) break;
+      queue.delete(u);
+      if (u === endId) break;
+
+      for (const edge of graph[u]) {
+        if (targetMode === 'road' && edge.mode !== 'road') continue;
+
+        const { weight, weatherSeverity, disruptionMultiplier, blocked } = edgeWeight(edge, context);
+        if (blocked) continue;
+
+        const alt = dist[u] + weight;
+        if (alt < dist[edge.to]) {
+          dist[edge.to] = alt;
+          prevEdge[edge.to] = { ...edge, weatherSeverity, disruptionMultiplier };
+        }
+      }
+    }
+
+    if (dist[endId] === Infinity) return null;
+
+    const pathEdges = [];
+    let cur = endId;
+    while (cur !== startId) {
+      const e = prevEdge[cur];
+      if (!e) break;
+      pathEdges.unshift(e);
+      cur = e.from;
+    }
+
+    return buildRouteResult(startId, endId, pathEdges, dist[endId], nodeMap);
+  }
+
+  // -------------------------------------------------------------------------
+  // 2. STATE-EXPANDED MULTIMODAL ROUTING (for 'railway', 'waterway', 'air')
+  // Stage 0: First-mile road access to transfer hub / station / port / airport
+  // Stage 1: Main freight corridor using targetMode (must traverse >= 1 targetMode edge)
+  // Stage 2: Last-mile road egress from station / port / airport to destination
+  // -------------------------------------------------------------------------
   const dist = {};
   const prevEdge = {};
-  const visited = new Set();
-  Object.keys(graph).forEach((id) => { dist[id] = Infinity; });
-  dist[startId] = 0;
+  const queue = new Set();
 
-  const queue = new Set(Object.keys(graph));
+  for (const n of NODES) {
+    for (let s = 0; s <= 2; s++) {
+      const k = `${n.id}|${s}`;
+      dist[k] = Infinity;
+      queue.add(k);
+    }
+  }
+
+  dist[`${startId}|0`] = 0;
+
+  // Weight incentives / road transfer penalties
+  const modeIncentive = targetMode === 'air' ? 0.35 : (targetMode === 'waterway' ? 0.75 : 0.85);
+  const roadTransferPenalty = 1.35;
 
   while (queue.size) {
-    let u = null;
+    let uKey = null;
     let best = Infinity;
-    for (const id of queue) {
-      if (dist[id] < best) { best = dist[id]; u = id; }
+    for (const k of queue) {
+      if (dist[k] < best) { best = dist[k]; uKey = k; }
     }
-    if (u === null) break;
-    queue.delete(u);
-    visited.add(u);
-    if (u === endId) break;
+    if (uKey === null || best === Infinity) break;
+    queue.delete(uKey);
 
-    for (const edge of graph[u]) {
-      let modePenalty = 1.0;
-      if (context.mode && context.mode !== 'all') {
-        if (edge.mode !== context.mode) {
-          // If preferred mode is not road, allow road with a penalty (for first/last mile)
-          if (edge.mode === 'road' && (context.mode === 'air' || context.mode === 'railway' || context.mode === 'waterway')) {
-            modePenalty = 3.0; // strong penalty to keep road usage minimal
-          } else {
-            continue; // completely disallow other modes (e.g., no trains on a 'waterway' route)
-          }
+    const [uId, sStr] = uKey.split('|');
+    const stage = parseInt(sStr, 10);
+    if (uId === endId && (stage === 1 || stage === 2)) break;
+
+    const prev = prevEdge[uKey];
+    const prevNode = prev ? prev.from : null;
+
+    for (const edge of graph[uId]) {
+      // Forbid immediate backtrack on previous edge
+      if (edge.to === prevNode) continue;
+
+      let nextStage = null;
+      let costMultiplier = 1.0;
+
+      if (stage === 0) {
+        if (edge.mode === targetMode) {
+          nextStage = 1;
+          costMultiplier = modeIncentive;
+        } else if (edge.mode === 'road') {
+          nextStage = 0;
+          costMultiplier = roadTransferPenalty;
+        }
+      } else if (stage === 1) {
+        if (edge.mode === targetMode) {
+          nextStage = 1;
+          costMultiplier = modeIncentive;
+        } else if (edge.mode === 'road') {
+          nextStage = 2;
+          costMultiplier = roadTransferPenalty;
+        }
+      } else if (stage === 2) {
+        if (edge.mode === 'road') {
+          nextStage = 2;
+          costMultiplier = roadTransferPenalty;
         }
       }
 
+      if (nextStage === null) continue;
+
       const { weight, weatherSeverity, disruptionMultiplier, blocked } = edgeWeight(edge, context);
       if (blocked) continue;
-      
-      const finalWeight = weight * modePenalty;
-      const alt = dist[u] + finalWeight;
-      if (alt < dist[edge.to]) {
-        dist[edge.to] = alt;
-        prevEdge[edge.to] = { ...edge, weatherSeverity, disruptionMultiplier, modePenalty };
+
+      const alt = dist[uKey] + weight * costMultiplier;
+      const nextKey = `${edge.to}|${nextStage}`;
+      if (alt < dist[nextKey]) {
+        dist[nextKey] = alt;
+        prevEdge[nextKey] = { ...edge, weatherSeverity, disruptionMultiplier, fromKey: uKey };
       }
     }
   }
 
-  if (dist[endId] === Infinity) {
-    return null; // no viable non-blocked route
+  // A valid multimodal path must finish in stage 1 or stage 2 (having used targetMode)
+  const k1 = `${endId}|1`;
+  const k2 = `${endId}|2`;
+  let bestEndKey = null;
+
+  if (dist[k1] !== Infinity && dist[k2] !== Infinity) {
+    bestEndKey = dist[k1] <= dist[k2] ? k1 : k2;
+  } else if (dist[k1] !== Infinity) {
+    bestEndKey = k1;
+  } else if (dist[k2] !== Infinity) {
+    bestEndKey = k2;
   }
 
-  // Reconstruct path
+  if (!bestEndKey) {
+    return null; // genuinely no multimodal path reachable using targetMode
+  }
+
   const pathEdges = [];
-  let cur = endId;
-  while (cur !== startId) {
-    const e = prevEdge[cur];
-    if (!e) break;
-    pathEdges.unshift(e);
-    cur = e.from;
+  let cur = bestEndKey;
+  while (cur) {
+    const p = prevEdge[cur];
+    if (!p) break;
+    pathEdges.unshift(p);
+    cur = p.fromKey;
   }
 
+  // Safety check: verify path actually utilized the target mode
+  if (!pathEdges.some((e) => e.mode === targetMode)) {
+    return null;
+  }
+
+  return buildRouteResult(startId, endId, pathEdges, dist[bestEndKey], nodeMap);
+}
+
+function buildRouteResult(startId, endId, pathEdges, totalWeight, nodeMap) {
   const totalKm = pathEdges.reduce((s, e) => s + e.km, 0);
-  const totalWeight = dist[endId];
-  
+
   let totalMinutes = 0;
-  pathEdges.forEach(e => {
+  const segments = pathEdges.map((e) => {
     let baseSpeed = 45;
     if (e.mode === 'air') baseSpeed = 500;
     else if (e.mode === 'railway') baseSpeed = 55;
     else if (e.mode === 'waterway') baseSpeed = 24;
-    
-    // Penalize speed by safety risk
+
     const edgeRatio = (e.disruptionMultiplier || 1) * Math.max(1, (e.weatherSeverity || 0) * 2);
     const speed = Math.max(12, baseSpeed / Math.sqrt(edgeRatio));
+    const segmentTime = Math.round((e.km / speed) * 60);
     totalMinutes += (e.km / speed) * 60;
+
+    // Segment condition
+    const isDisrupted = (e.weatherSeverity > 0.6 || (e.disruptionMultiplier && e.disruptionMultiplier >= 4.0));
+    const isCaution = (e.weatherSeverity > 0.3 || (e.disruptionMultiplier && e.disruptionMultiplier >= 1.8));
+    const condition = isDisrupted ? 'disrupted' : (isCaution ? 'caution' : 'clear');
+
+    // Individual segment safety percentage (0-100)
+    let segmentSafety = 98;
+    if (e.disruptionMultiplier >= 15) segmentSafety -= 55;
+    else if (e.disruptionMultiplier >= 5) segmentSafety -= 35;
+    else if (e.disruptionMultiplier >= 2) segmentSafety -= 15;
+
+    segmentSafety -= Math.round((e.weatherSeverity || 0) * 25);
+    if (e.terrainFactor && e.terrainFactor > 1.3) {
+      segmentSafety -= Math.round((e.terrainFactor - 1) * 10);
+    }
+    segmentSafety = Math.max(15, Math.min(99, segmentSafety));
+
+    return {
+      from: nodeMap[e.from],
+      to: nodeMap[e.to],
+      km: e.km,
+      distance: e.km,
+      time: segmentTime,
+      road: e.road,
+      corridor: e.road,
+      mode: e.mode || 'road',
+      weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
+      disruptionMultiplier: e.disruptionMultiplier || 1,
+      condition,
+      risk: condition,
+      status: condition,
+      safetyIndex: segmentSafety,
+    };
   });
-  
+
   const etaMinutes = Math.round(totalMinutes);
   const avgSpeedKmh = totalKm > 0 ? Number((totalKm / (etaMinutes / 60)).toFixed(1)) : 0;
 
-  // Compute Safety Score (100% = clear, <60% = high hazard risk)
-  const maxDisruption = pathEdges.reduce((m, e) => Math.max(m, e.disruptionMultiplier || 1), 1);
-  const maxWeather = pathEdges.reduce((m, e) => Math.max(m, e.weatherSeverity || 0), 0);
-  const safetyPenalty = (maxDisruption - 1) * 15 + maxWeather * 40;
-  const safetyIndex = Math.max(15, Math.min(99, Math.round(100 - safetyPenalty)));
+  // Distance-weighted safety aggregation across all segments
+  let weightedSafetySum = 0;
+  segments.forEach((seg) => {
+    weightedSafetySum += seg.km * seg.safetyIndex;
+  });
+  let routeSafety = totalKm > 0 ? (weightedSafetySum / totalKm) : 95;
 
-  const nodeMap = Object.fromEntries(NODES.map((n) => [n.id, n]));
+  // Corridor hazard damping if any segment has severe disruption
+  const hasSevereDisruption = segments.some((s) => s.disruptionMultiplier >= 14);
+  const hasModerateDisruption = segments.some((s) => s.disruptionMultiplier >= 4);
+  if (hasSevereDisruption) {
+    routeSafety = Math.min(routeSafety, 55);
+  } else if (hasModerateDisruption) {
+    routeSafety = Math.min(routeSafety, 78);
+  }
+  const safetyIndex = Math.max(15, Math.min(99, Math.round(routeSafety)));
+
+  // Identify multimodal transfer nodes
+  const transfers = [];
+  for (let i = 0; i < pathEdges.length - 1; i++) {
+    if (pathEdges[i].mode !== pathEdges[i + 1].mode) {
+      transfers.push({
+        node: nodeMap[pathEdges[i].to],
+        fromMode: pathEdges[i].mode,
+        toMode: pathEdges[i + 1].mode,
+        name: nodeMap[pathEdges[i].to]?.name || pathEdges[i].to,
+      });
+    }
+  }
+
+  // Determine dominant mode label
+  const hasAir = pathEdges.some((e) => e.mode === 'air');
+  const hasRailway = pathEdges.some((e) => e.mode === 'railway');
+  const hasWaterway = pathEdges.some((e) => e.mode === 'waterway');
+  let modeLabel = 'ROAD';
+  let primaryMode = 'road';
+  if (hasAir) {
+    modeLabel = 'AIR + ROAD';
+    primaryMode = 'air';
+  } else if (hasRailway) {
+    modeLabel = 'RAIL + ROAD';
+    primaryMode = 'railway';
+  } else if (hasWaterway) {
+    modeLabel = 'WATERWAY + ROAD';
+    primaryMode = 'waterway';
+  }
+
   const path = [startId, ...pathEdges.map((e) => e.to)].map((id) => nodeMap[id]);
 
   return {
     path,
-    edges: pathEdges.map((e) => ({
-      from: nodeMap[e.from],
-      to: nodeMap[e.to],
-      km: e.km,
-      road: e.road,
-      mode: e.mode,
-      weatherSeverity: Number((e.weatherSeverity || 0).toFixed(2)),
-      disruptionMultiplier: e.disruptionMultiplier || 1,
-      condition: e.weatherSeverity > 0.6 || e.disruptionMultiplier >= 4.0 ? 'disrupted'
-        : (e.weatherSeverity > 0.3 || e.disruptionMultiplier >= 1.8) ? 'caution' : 'clear',
-    })),
+    edges: segments,
+    segments,
+    transfers,
+    mode: primaryMode,
+    modeLabel,
     totalKm: Number(totalKm.toFixed(1)),
+    totalDistance: Number(totalKm.toFixed(1)),
     totalWeight: Number(totalWeight.toFixed(1)),
     avgSpeedKmh: Number(avgSpeedKmh.toFixed(1)),
     etaMinutes,
+    totalTime: etaMinutes,
     safetyIndex,
   };
 }

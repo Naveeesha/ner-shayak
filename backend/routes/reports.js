@@ -1,91 +1,146 @@
 const express = require('express');
-const { v4: uuid } = require('uuid');
-const db = require('../db');
-const { requireAuth, requireRole } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth');
+const supabaseService = require('../services/supabaseService');
+const { uploadIncidentPhotoFromDataUrl } = require('../services/storageService');
+const {
+  notifyDriverIncident,
+  notifyFieldOfficerIncident,
+  notifyAffectedDrivers,
+  notifyIncidentResolved,
+} = require('../services/notificationService');
 
 const router = express.Router();
 
-const CATEGORIES = ['road_block', 'landslide', 'flood', 'bridge_damage', 'accident', 'traffic', 'other'];
-const SEVERITIES = ['low', 'medium', 'high', 'critical'];
+// Upload incident photo directly to Supabase Storage incident-photos bucket
+router.post('/upload-photo', requireAuth, async (req, res) => {
+  const { incidentId, photoDataUrl } = req.body || {};
+  if (!incidentId || !photoDataUrl) {
+    return res.status(400).json({ error: 'incidentId and photoDataUrl are required' });
+  }
 
-function insertReport(userId, body, { preserveClientTimestamp = false } = {}) {
-  const { nodeId, road, fromNode, toNode, category, severity = 'medium', title, description, lat, lng, photoDataUrl, createdAt, synced = 1 } = body;
-  if (!category || !CATEGORIES.includes(category)) throw new Error('Invalid or missing category');
-  if (!title) throw new Error('Title is required');
-  if (severity && !SEVERITIES.includes(severity)) throw new Error('Invalid severity');
-  const report = {
-    id: uuid(),
-    userId,
-    nodeId: nodeId || null,
-    road: road || null,
-    fromNode: fromNode || null,
-    toNode: toNode || null,
-    category,
-    severity,
-    title,
-    description: description || '',
-    lat: lat ?? null,
-    lng: lng ?? null,
-    photoDataUrl: photoDataUrl || null,
-    status: 'open',
-    synced,
-    createdAt: preserveClientTimestamp ? (createdAt || new Date().toISOString()) : new Date().toISOString(),
-  };
-  db.prepare(`INSERT INTO field_reports (id,userId,nodeId,road,fromNode,toNode,category,severity,title,description,lat,lng,photoDataUrl,status,synced,createdAt)
-    VALUES (@id,@userId,@nodeId,@road,@fromNode,@toNode,@category,@severity,@title,@description,@lat,@lng,@photoDataUrl,@status,@synced,@createdAt)`).run(report);
-  return report;
-}
-
-router.get('/', requireAuth, (req, res) => {
-  const reports = db.prepare('SELECT * FROM field_reports ORDER BY createdAt DESC LIMIT 200').all();
-  res.json({ reports, categories: CATEGORIES, severities: SEVERITIES });
+  try {
+    const result = await uploadIncidentPhotoFromDataUrl(incidentId, photoDataUrl);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Photo upload failed. Please try again.' });
+    }
+    res.json(result);
+  } catch (err) {
+    console.error('[Reports Route] Photo upload exception:', err.message);
+    res.status(500).json({ error: 'Photo upload failed. Please try again.', detail: err.message });
+  }
 });
 
-router.get('/mine', requireAuth, (req, res) => {
-  const reports = db.prepare('SELECT * FROM field_reports WHERE userId = ? ORDER BY createdAt DESC').all(req.user.id);
-  res.json({ reports });
+const CATEGORIES = ['road_block', 'road_blockage', 'landslide', 'flood', 'bridge_damage', 'accident', 'traffic', 'vehicle_breakdown', 'poor_road_condition', 'weather_hazard', 'visibility_problem', 'infrastructure_damage', 'other'];
+const SEVERITIES = ['minor', 'moderate', 'major', 'critical', 'low', 'medium', 'high'];
+
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const reports = await supabaseService.getIncidents(200);
+    res.json({ reports, categories: CATEGORIES, severities: SEVERITIES });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch reports', detail: err.message });
+  }
+});
+
+router.get('/mine', requireAuth, async (req, res) => {
+  try {
+    const reports = await supabaseService.getIncidentsByUserId(req.user.id);
+    res.json({ reports });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user reports', detail: err.message });
+  }
 });
 
 // Standard create (online)
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
-    const report = insertReport(req.user.id, req.body || {});
+    const report = await supabaseService.createIncident(req.user.id, req.body || {}, req.user.role || 'field');
+
+    // Non-blocking SMS notification triggers
+    const role = (req.user.role || '').toLowerCase();
+    const isDriver = role === 'driver';
+    const dispatchFn = isDriver ? notifyDriverIncident : notifyFieldOfficerIncident;
+
+    Promise.allSettled([
+      dispatchFn(report),
+      notifyAffectedDrivers(report),
+    ]).catch((err) => {
+      console.warn('[Reports] Incident notification failed (non-blocking):', err.message);
+    });
+
     res.status(201).json({ report });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-// Offline sync: client queues reports locally while offline (low-network
-// districts) and POSTs the whole batch here once connectivity returns.
-router.post('/sync', requireAuth, (req, res) => {
+// Offline sync: client queues reports locally while offline (low-network districts)
+// and POSTs the whole batch here once connectivity returns.
+router.post('/sync', requireAuth, async (req, res) => {
   const { reports } = req.body || {};
   if (!Array.isArray(reports) || reports.length === 0) {
     return res.status(400).json({ error: 'reports array is required' });
   }
   const saved = [];
   const failed = [];
-  reports.forEach((r) => {
+
+  for (const r of reports) {
     try {
-      saved.push(insertReport(req.user.id, { ...r, synced: 1 }, { preserveClientTimestamp: true }));
+      const savedReport = await supabaseService.createIncident(
+        req.user.id,
+        { ...r, synced: 1 },
+        req.user.role || 'field',
+        { preserveClientTimestamp: true }
+      );
+      saved.push(savedReport);
+
+      // Trigger notifications for newly synced reports
+      const role = (req.user.role || '').toLowerCase();
+      const isDriver = role === 'driver';
+      const dispatchFn = isDriver ? notifyDriverIncident : notifyFieldOfficerIncident;
+
+      Promise.allSettled([
+        dispatchFn(savedReport),
+        notifyAffectedDrivers(savedReport),
+      ]).catch((err) => {
+        console.warn('[Reports Sync] Notification failed (non-blocking):', err.message);
+      });
     } catch (err) {
       failed.push({ clientId: r.clientId, error: err.message });
     }
-  });
+  }
+
   res.status(saved.length ? 201 : 400).json({ synced: saved.length, failed, reports: saved });
 });
 
-router.patch('/:id/status', requireAuth, (req, res) => {
-  const { status } = req.body || {};
-  if (!['open', 'in_progress', 'resolved'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
-  const existing = db.prepare('SELECT * FROM field_reports WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ error: 'Report not found' });
-  if (req.user.role !== 'official' && existing.userId !== req.user.id) {
-    return res.status(403).json({ error: 'You do not have permission to update this report' });
+router.patch('/:id/status', requireAuth, async (req, res) => {
+  const { status, comment } = req.body || {};
+  if (!['open', 'in_progress', 'resolved', 'active', 'verified', 'under_review'].includes(status)) {
+    return res.status(400).json({ error: 'Invalid status' });
   }
-  db.prepare('UPDATE field_reports SET status = ? WHERE id = ?').run(status, req.params.id);
-  const report = db.prepare('SELECT * FROM field_reports WHERE id = ?').get(req.params.id);
-  res.json({ report });
+
+  try {
+    const result = await supabaseService.updateIncidentStatus(
+      req.params.id,
+      status,
+      req.user.id,
+      req.user.role,
+      comment
+    );
+    if (result.notFound) return res.status(404).json({ error: 'Report not found' });
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to update this report' });
+
+    // If resolved, notify operators and affected drivers
+    if (status === 'resolved' && result.report) {
+      notifyIncidentResolved(result.report).catch((err) => {
+        console.warn('[Reports] Resolve notification failed (non-blocking):', err.message);
+      });
+    }
+
+    res.json({ report: result.report });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update report status', detail: err.message });
+  }
 });
 
 module.exports = router;

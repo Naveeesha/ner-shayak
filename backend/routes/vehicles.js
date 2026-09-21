@@ -1,52 +1,59 @@
 const express = require('express');
-const { v4: uuid } = require('uuid');
-const db = require('../db');
 const { requireAuth } = require('../middleware/auth');
+const supabaseService = require('../services/supabaseService');
 
 const router = express.Router();
 
-router.get('/', requireAuth, (req, res) => {
-  const rows = req.user.role === 'driver'
-    ? db.prepare('SELECT * FROM vehicles WHERE ownerId = ?').all(req.user.id)
-    : db.prepare('SELECT * FROM vehicles ORDER BY lastUpdated DESC').all();
-  res.json({ vehicles: rows });
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const ownerId = req.user.role === 'driver' ? req.user.id : null;
+    const vehicles = await supabaseService.getVehicles(ownerId);
+    res.json({ vehicles });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch vehicles', detail: err.message });
+  }
 });
 
-router.post('/', requireAuth, (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   const { vehicleNumber, cargoType, originNode, destinationNode, lat, lng } = req.body || {};
   if (!vehicleNumber || !originNode || !destinationNode) {
     return res.status(400).json({ error: 'vehicleNumber, originNode and destinationNode are required' });
   }
-  const vehicle = {
-    id: uuid(),
-    ownerId: req.user.id,
-    vehicleNumber,
-    cargoType: cargoType || 'General cargo',
-    originNode,
-    destinationNode,
-    status: 'in_transit',
-    lat: lat ?? null,
-    lng: lng ?? null,
-    lastUpdated: new Date().toISOString(),
-  };
-  db.prepare(`INSERT INTO vehicles (id,ownerId,vehicleNumber,cargoType,originNode,destinationNode,status,lat,lng,lastUpdated)
-    VALUES (@id,@ownerId,@vehicleNumber,@cargoType,@originNode,@destinationNode,@status,@lat,@lng,@lastUpdated)`).run(vehicle);
-  res.status(201).json({ vehicle });
+
+  try {
+    const vehicle = await supabaseService.createVehicle(req.user.id, {
+      vehicleNumber,
+      cargoType,
+      originNode,
+      destinationNode,
+      lat,
+      lng,
+    });
+    res.status(201).json({ vehicle });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create vehicle', detail: err.message });
+  }
 });
 
 // GPS ping — called periodically by the driver's device/app to update live location
-router.post('/:id/ping', requireAuth, (req, res) => {
+router.post('/:id/ping', requireAuth, async (req, res) => {
   const { lat, lng, status } = req.body || {};
   if (lat === undefined || lng === undefined) return res.status(400).json({ error: 'lat and lng are required' });
-  const vehicle = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
-  if (!vehicle) return res.status(404).json({ error: 'Vehicle not found' });
-  if (req.user.role !== 'official' && vehicle.ownerId !== req.user.id) {
-    return res.status(403).json({ error: 'You do not have permission to update this vehicle' });
+
+  try {
+    const result = await supabaseService.updateVehicleLocation(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      { lat, lng, status }
+    );
+    if (result.notFound) return res.status(404).json({ error: 'Vehicle not found' });
+    if (result.forbidden) return res.status(403).json({ error: 'You do not have permission to update this vehicle' });
+
+    res.json({ vehicle: result.vehicle });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update vehicle location', detail: err.message });
   }
-  db.prepare('UPDATE vehicles SET lat = ?, lng = ?, status = COALESCE(?, status), lastUpdated = ? WHERE id = ?')
-    .run(lat, lng, status || null, new Date().toISOString(), req.params.id);
-  const updated = db.prepare('SELECT * FROM vehicles WHERE id = ?').get(req.params.id);
-  res.json({ vehicle: updated });
 });
 
 module.exports = router;

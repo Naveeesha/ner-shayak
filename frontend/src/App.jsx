@@ -1,6 +1,7 @@
 import React, { useEffect, useState, Component } from 'react';
 import './App.css';
 import { AuthProvider, LANGUAGES, NER_REGION_STATES, USER_ROLES, useAuth } from './context/AuthContext';
+import { useTranslation } from './hooks/useTranslation';
 import api from './services/api';
 import LiveMap from './components/LiveMap';
 import RoutePlanner from './components/RoutePlanner';
@@ -102,26 +103,28 @@ const DEMO_PROFILES = [
 const ROLE_LABEL = { driver: 'Driver', field: 'Field officer', logistics: 'Logistics', official: 'Official' };
 
 function Brand({ light = false }) {
-  return <div className={`brand ${light ? 'light' : ''}`}><div className="brand-mark"><Icon n="logo" s={20}/></div><div><strong>ner-sahayak</strong><span>intelligence network</span></div></div>;
+  const { t } = useTranslation();
+  return <div className={`brand ${light ? 'light' : ''}`}><div className="brand-mark"><Icon n="logo" s={20}/></div><div><strong>ner-sahayak</strong><span>{t('auth.intelligenceNetwork') || 'intelligence network'}</span></div></div>;
 }
 
 function AuthShell({ children, intro }) {
+  const { t } = useTranslation();
   return (
     <main className="login-page">
       <section className="login-aside">
         <Brand light/>
         <div className="login-hero">
-          <div className="live-label"><i/>NORTHEAST INDIA • LIVE INTELLIGENCE</div>
-          <h1>Every route.<br/><em>A safer way forward.</em></h1>
-          <p>One calm, connected view of the information that keeps people, essential services, and communities moving.</p>
+          <div className="live-label"><i/>{t('auth.liveIntelligence')}</div>
+          <h1>{t('auth.heroTitle1')}<br/><em>{t('auth.heroTitle2')}</em></h1>
+          <p>{t('auth.heroDesc')}</p>
         </div>
         <div className="route-art">
           <span className="road a"/><span className="road b"/><span className="road c"/>
           <i className="dot da"/><i className="dot db"/><i className="dot dc"/>
-          <div className="art-tag ta"><b/>Road access<br/><strong>Monitored live</strong></div>
-          <div className="art-tag tb"><b/>Risk intelligence<br/><strong>Always learning</strong></div>
+          <div className="art-tag ta"><b/>{t('auth.roadAccess')}<br/><strong>{t('auth.monitoredLive')}</strong></div>
+          <div className="art-tag tb"><b/>{t('auth.riskIntelligence')}<br/><strong>{t('auth.alwaysLearning')}</strong></div>
         </div>
-        <div className="aside-foot"><i/>System status: All services operational <span>•</span> v1.0.0</div>
+        <div className="aside-foot"><i/>{t('auth.systemStatus')} <span>•</span> v1.0.0</div>
       </section>
       <section className="login-panel">
         <div className="login-box">
@@ -129,7 +132,7 @@ function AuthShell({ children, intro }) {
           {intro}
           {children}
         </div>
-        <footer>© 2026 Ner-Sahayak AI <span>•</span> Made for resilient movement</footer>
+        <footer>{t('auth.footerRights')} <span>•</span> {t('auth.footerMadeFor')}</footer>
       </section>
     </main>
   );
@@ -137,6 +140,7 @@ function AuthShell({ children, intro }) {
 
 function Login({ onSignup }) {
   const { login } = useAuth();
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [seen, setSeen] = useState(false);
@@ -166,12 +170,12 @@ function Login({ onSignup }) {
 
 
   return (
-    <AuthShell intro={<div className="login-intro"><div className="eyebrow">USER ACCESS</div><h2>Sign in to your workspace</h2><p>Enter your credentials to access your dedicated workspace and regional tools.</p></div>}>
+    <AuthShell intro={<div className="login-intro"><div className="eyebrow">{t('auth.userAccess')}</div><h2>{t('auth.signInTitle')}</h2><p>{t('auth.signInDesc')}</p></div>}>
       <form onSubmit={submit} className="login-form">
-        <label>Work email
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder="name@ner-sahayak.in" autoComplete="username" required/>
+        <label>{t('auth.workEmail')}
+          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={t('auth.emailPlaceholder')} autoComplete="username" required/>
         </label>
-        <label>Password
+        <label>{t('auth.password')}
           <div className="password">
             <input value={password} onChange={(e) => setPassword(e.target.value)} type={seen ? 'text' : 'password'} placeholder="••••••••" autoComplete="current-password" required/>
             <button type="button" onClick={() => setSeen(!seen)} aria-label="Toggle password visibility"><Icon n="eye" s={18}/></button>
@@ -179,28 +183,29 @@ function Login({ onSignup }) {
         </label>
         {error && <p className="form-error" role="alert" style={{ marginTop: '8px', marginBottom: '0' }}>{error}</p>}
         <button disabled={busy} className="sign-in" type="submit">
-          {busy ? 'Opening your workspace…' : <>Sign in to workspace <Icon n="arrow" s={18}/></>}
+          {busy ? t('auth.openingWorkspace') : <>{t('auth.signInButton')} <Icon n="arrow" s={18}/></>}
         </button>
       </form>
 
       <div className="demo-fill-box">
-        <div className="demo-fill-header"><Icon n="spark" s={14}/><span>Test demo accounts (Quick Fill)</span></div>
+        <div className="demo-fill-header"><Icon n="spark" s={14}/><span>{t('auth.testDemoAccounts')}</span></div>
         <div className="demo-fill-buttons">
           {DEMO_PROFILES.map((p) => (
             <button type="button" key={p.email} className="demo-chip" onClick={() => fillDemo(p.email)}>
-              {ROLE_LABEL[p.role]}
+              {t(`auth.role_${p.role}`) || ROLE_LABEL[p.role]}
             </button>
           ))}
         </div>
       </div>
 
-      <p className="login-help">New to the network? <button className="link" onClick={onSignup}>Create a profile</button></p>
+      <p className="login-help">{t('auth.newToNetwork')} <button className="link" onClick={onSignup}>{t('auth.createProfileLink')}</button></p>
     </AuthShell>
   );
 }
 
 function Signup({ onLogin }) {
   const { signup } = useAuth();
+  const { t } = useTranslation();
   const [form, setForm] = useState(emptySignup);
   const [seen, setSeen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -222,56 +227,57 @@ function Signup({ onLogin }) {
   };
 
   return (
-    <AuthShell intro={<div className="login-intro"><div className="eyebrow">JOIN THE NETWORK</div><h2>Create your NER-Sahayak profile</h2><p>Register as a driver, field officer, logistics operator, or government official.</p></div>}>
+    <AuthShell intro={<div className="login-intro"><div className="eyebrow">{t('auth.joinNetwork')}</div><h2>{t('auth.createProfileTitle')}</h2><p>{t('auth.createProfileDesc')}</p></div>}>
       <div className="role-picker">
         {roles.map((item) => (
           <button type="button" key={item.id} onClick={() => setForm((prev) => ({ ...prev, role: item.id }))} className={item.id === form.role ? 'active' : ''}>
-            <span><Icon n={item.icon} s={17}/></span>{item.label}{item.id === form.role && <i><Icon n="check" s={12}/></i>}
+            <span><Icon n={item.icon} s={17}/></span>{t(`auth.role_${item.id}`) || item.label}{item.id === form.role && <i><Icon n="check" s={12}/></i>}
           </button>
         ))}
       </div>
       <form onSubmit={submit} className="login-form signup-form">
         <div className="field-row">
-          <label>Full name<input value={form.name} onChange={set('name')} type="text" placeholder="Your name" required/></label>
-          <label>Phone<input value={form.phone} onChange={set('phone')} type="tel" placeholder="+91"/></label>
+          <label>{t('auth.fullName')}<input value={form.name} onChange={set('name')} type="text" placeholder={t('auth.namePlaceholder')} required/></label>
+          <label>{t('auth.phone')}<input value={form.phone} onChange={set('phone')} type="tel" placeholder="+91"/></label>
         </div>
-        <label>Work email<input value={form.email} onChange={set('email')} type="email" autoComplete="email" required/></label>
-        <label>Organisation / unit<input value={form.organisation} onChange={set('organisation')} type="text" placeholder="Depot, PWD unit, control room, or department" required/></label>
+        <label>{t('auth.workEmail')}<input value={form.email} onChange={set('email')} type="email" autoComplete="email" required/></label>
+        <label>{t('auth.organisation')}<input value={form.organisation} onChange={set('organisation')} type="text" placeholder={t('auth.orgPlaceholder')} required/></label>
         <div className="field-row">
-          <label>State
+          <label>{t('auth.state')}
             <select value={form.state} onChange={set('state')}>
-              {NER_REGION_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+              {NER_REGION_STATES.map((state) => <option key={state} value={state}>{t(`enum.${state}`) || state}</option>)}
             </select>
           </label>
-          <label>District / posting<input value={form.district} onChange={set('district')} type="text" placeholder="District" required/></label>
+          <label>{t('auth.district')}<input value={form.district} onChange={set('district')} type="text" placeholder={t('auth.district')} required/></label>
         </div>
-        {form.role === 'driver' && <label>Vehicle number<input value={form.vehicleNumber} onChange={set('vehicleNumber')} type="text" placeholder="AS 01 K 4309" required/></label>}
-        {form.role === 'logistics' && <label>Logistics hub<input value={form.hub} onChange={set('hub')} type="text" placeholder="Khanapara hub" required/></label>}
-        {form.role === 'official' && <label>Department<input value={form.department} onChange={set('department')} type="text" placeholder="Disaster management / DoNER" required/></label>}
-        <label>Alert language
+        {form.role === 'driver' && <label>{t('auth.vehicleNumber')}<input value={form.vehicleNumber} onChange={set('vehicleNumber')} type="text" placeholder="AS 01 K 4309" required/></label>}
+        {form.role === 'logistics' && <label>{t('auth.hub')}<input value={form.hub} onChange={set('hub')} type="text" placeholder={t('auth.hubPlaceholder')} required/></label>}
+        {form.role === 'official' && <label>{t('auth.department')}<input value={form.department} onChange={set('department')} type="text" placeholder={t('auth.deptPlaceholder')} required/></label>}
+        <label>{t('auth.alertLanguage')}
           <select value={form.language} onChange={set('language')}>
             {LANGUAGES.map((lang) => <option key={lang.id} value={lang.id}>{lang.label}</option>)}
           </select>
         </label>
         <div className="field-row">
-          <label>Password
+          <label>{t('auth.password')}
             <div className="password">
               <input value={form.password} onChange={set('password')} type={seen ? 'text' : 'password'} autoComplete="new-password" required/>
               <button type="button" onClick={() => setSeen(!seen)} aria-label="Toggle password visibility"><Icon n="eye" s={18}/></button>
             </div>
           </label>
-          <label>Confirm password<input value={form.confirm} onChange={set('confirm')} type={seen ? 'text' : 'password'} autoComplete="new-password" required/></label>
+          <label>{t('auth.confirmPassword')}<input value={form.confirm} onChange={set('confirm')} type={seen ? 'text' : 'password'} autoComplete="new-password" required/></label>
         </div>
         {error && <p className="form-error" role="alert">{error}</p>}
-        <button disabled={busy} className="sign-in">{busy ? 'Creating your profile…' : <>Create profile and enter <Icon n="arrow" s={18}/></>}</button>
+        <button disabled={busy} className="sign-in">{busy ? t('auth.creatingProfile') : <>{t('auth.createProfileBtn')} <Icon n="arrow" s={18}/></>}</button>
       </form>
-      <p className="login-help">Already registered? <button className="link" onClick={onLogin}>Sign in</button></p>
+      <p className="login-help">{t('auth.alreadyRegistered')} <button className="link" onClick={onLogin}>{t('auth.signInLink')}</button></p>
     </AuthShell>
   );
 }
 
 function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
   const { user, updateProfile } = useAuth();
+  const { t } = useTranslation();
   const [form, setForm] = useState({
     name: user.name, phone: user.phone || '', organisation: user.organisation || '',
     vehicleNumber: user.vehicleNumber || '', state: user.state || 'Assam', district: user.district || '',
@@ -284,7 +290,7 @@ function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
     event.preventDefault();
     try {
       await updateProfile(form);
-      notify('Profile saved. Alerts will use your preferred language.');
+      notify(t('settings.savedSuccess') || 'Profile saved. Alerts will use your preferred language.');
     } catch (err) {
       notify(`Could not save profile: ${err.message}`);
     }
@@ -293,44 +299,44 @@ function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
   return (
     <section className="profile-page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← Back to Overview</button>
-        <button className="profile-signout-btn" onClick={exit}>Sign out of account</button>
+        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← {t('navigation.backToOverview')}</button>
+        <button className="profile-signout-btn" onClick={exit}>{t('navigation.signOut')}</button>
       </div>
       <div className="profile-hero card">
         <span className="profile-avatar">{initials}</span>
-        <div><small>SIGNED IN ACCOUNT</small><h2>{user.name}</h2><p>{user.email}</p></div>
-        <div className="profile-role-badge"><Icon n={roleMeta.icon} s={16}/>{roleMeta.label}</div>
+        <div><small>{t('profile.signedInAccount')}</small><h2>{user.name}</h2><p>{user.email}</p></div>
+        <div className="profile-role-badge"><Icon n={roleMeta.icon} s={16}/>{t(`auth.role_${roleMeta.id}`) || roleMeta.label}</div>
       </div>
       <div className="profile-grid">
         <form className="card profile-form login-form" onSubmit={save}>
-          <header><div><small>ACCOUNT</small><h2>Edit your profile</h2></div></header>
-          <label>Full name<input value={form.name} onChange={set('name')} type="text" required/></label>
-          <label>Work email<input value={user.email} type="email" disabled/></label>
+          <header><div><small>{t('profile.account')}</small><h2>{t('profile.editProfile')}</h2></div></header>
+          <label>{t('auth.fullName')}<input value={form.name} onChange={set('name')} type="text" required/></label>
+          <label>{t('auth.workEmail')}<input value={user.email} type="email" disabled/></label>
           <div className="field-row">
-            <label>Phone<input value={form.phone} onChange={set('phone')} type="tel"/></label>
-            <label>State
+            <label>{t('auth.phone')}<input value={form.phone} onChange={set('phone')} type="tel"/></label>
+            <label>{t('auth.state')}
               <select value={form.state} onChange={set('state')}>
-                {NER_REGION_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+                {NER_REGION_STATES.map((state) => <option key={state} value={state}>{t(`enum.${state}`) || state}</option>)}
               </select>
             </label>
           </div>
-          <label>District / posting<input value={form.district} onChange={set('district')} type="text"/></label>
-          <label>Organisation / unit<input value={form.organisation} onChange={set('organisation')} type="text"/></label>
-          {user.role === 'driver' && <label>Vehicle number<input value={form.vehicleNumber} onChange={set('vehicleNumber')} type="text"/></label>}
-          {user.role === 'logistics' && <label>Logistics hub<input value={form.hub} onChange={set('hub')} type="text"/></label>}
-          {user.role === 'official' && <label>Department<input value={form.department} onChange={set('department')} type="text"/></label>}
-          <label>Alert language
+          <label>{t('auth.district')}<input value={form.district} onChange={set('district')} type="text"/></label>
+          <label>{t('auth.organisation')}<input value={form.organisation} onChange={set('organisation')} type="text"/></label>
+          {user.role === 'driver' && <label>{t('auth.vehicleNumber')}<input value={form.vehicleNumber} onChange={set('vehicleNumber')} type="text"/></label>}
+          {user.role === 'logistics' && <label>{t('auth.hub')}<input value={form.hub} onChange={set('hub')} type="text"/></label>}
+          {user.role === 'official' && <label>{t('auth.department')}<input value={form.department} onChange={set('department')} type="text"/></label>}
+          <label>{t('auth.alertLanguage')}
             <select value={form.language} onChange={set('language')}>
               {LANGUAGES.map((lang) => <option key={lang.id} value={lang.id}>{lang.label}</option>)}
             </select>
           </label>
-          <button className="primary" type="submit">Save profile</button>
+          <button className="primary" type="submit">{t('profile.saveProfile')}</button>
         </form>
         <aside className="card profile-access">
-          <small>ROLE ACCESS</small>
-          <h2>What this workspace can do</h2>
-          <ul>{roleMeta.permissions.map((item) => <li key={item}><Icon n="check" s={14}/>{item}</li>)}</ul>
-          <p className="profile-note">Multilingual alerts are set to <b>{languageLabel}</b>. Field reports can sync later when the network returns.</p>
+          <small>{t('profile.roleAccess')}</small>
+          <h2>{t('profile.workspaceCapabilities')}</h2>
+          <ul>{roleMeta.permissions.map((item, idx) => <li key={idx}><Icon n="check" s={14}/>{t(`profile.perm_${roleMeta.id}_${idx}`) || item}</li>)}</ul>
+          <p className="profile-note">{t('profile.note')}</p>
         </aside>
       </div>
     </section>
@@ -339,30 +345,31 @@ function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
 
 // Full-page views for each nav item — all backed by the real API.
 function PageView({ page, role, notify, navigate }) {
+  const { t } = useTranslation();
   const details = {
-    'Live map': ['Live network map', 'Explore road conditions, weather warnings and moving resources in one map.', 'map'],
-    'Route planner': ['Plan the safest route', 'AI-optimized routing using live weather and disruption data.', 'route'],
-    Alerts: ['Your alerts', 'Stay up to date with the signals that matter to you.', 'bell'],
-    'Field reports': ['Field reports & hazards', 'Share a geo-tagged update that helps the wider network respond.', 'report'],
-    Settings: ['Workspace settings', 'Manage notification preferences, language, and night driving mode.', 'settings'],
-    'Team directory': ['Team directory', 'Every registered driver, field officer, logistics operator, and official across the network.', 'grid'],
-    'Logistics Overview': ['Logistics Overview', 'Monitor active cargo routes, backlogs, and assign drivers.', 'grid'],
-    'Cargo shipments': ['Cargo dispatch queue', 'Manage shipment routes, dispatch priorities, and delivery status.', 'route'],
-    'Fleet tracking': ['Fleet GPS tracking', 'Live vehicle positions, telematics, and driver tracking.', 'phone'],
-    'Vehicle telemetry': ['Vehicle GPS telemetry', 'Manage assigned vehicle, telemetry fixes, and journey position.', 'phone'],
+    'Live map': [t('pageView.liveMap.title') || 'Live network map', t('pageView.liveMap.desc') || 'Explore road conditions, weather warnings and moving resources in one map.', 'map'],
+    'Route planner': [t('pageView.routePlanner.title') || 'Plan the safest route', t('pageView.routePlanner.desc') || 'AI-optimized routing using live weather and disruption data.', 'route'],
+    Alerts: [t('pageView.alerts.title') || 'Your alerts', t('pageView.alerts.desc') || 'Stay up to date with the signals that matter to you.', 'bell'],
+    'Field reports': [t('pageView.fieldReports.title') || 'Field reports & hazards', t('pageView.fieldReports.desc') || 'Share a geo-tagged update that helps the wider network respond.', 'report'],
+    Settings: [t('pageView.settings.title') || 'Workspace settings', t('pageView.settings.desc') || 'Manage notification preferences, language, and night driving mode.', 'settings'],
+    'Team directory': [t('pageView.teamDir.title') || 'Team directory', t('pageView.teamDir.desc') || 'Every registered driver, field officer, logistics operator, and official across the network.', 'grid'],
+    'Logistics Overview': [t('pageView.logistics.title') || 'Logistics Overview', t('pageView.logistics.desc') || 'Monitor active cargo routes, backlogs, and assign drivers.', 'grid'],
+    'Cargo shipments': [t('pageView.cargo.title') || 'Cargo dispatch queue', t('pageView.cargo.desc') || 'Manage shipment routes, dispatch priorities, and delivery status.', 'route'],
+    'Fleet tracking': [t('pageView.fleet.title') || 'Fleet GPS tracking', t('pageView.fleet.desc') || 'Live vehicle positions, telematics, and driver tracking.', 'phone'],
+    'Vehicle telemetry': [t('pageView.vehicle.title') || 'Vehicle GPS telemetry', t('pageView.vehicle.desc') || 'Manage assigned vehicle, telemetry fixes, and journey position.', 'phone'],
   };
   const [title, description, icon] = details[page] || details['Live map'];
   return (
     <section className="card" style={{ padding: '22px 24px' }}>
       <header style={{ padding: 0, minHeight: 'auto', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <small><Icon n={icon} s={12}/> {page.toUpperCase()}</small>
+          <small><Icon n={icon} s={12}/> {t(`nav.${page.toLowerCase().replace(' ', '')}`) || page.toUpperCase()}</small>
           <h2 style={{ marginTop: 8 }}>{title}</h2>
           <p style={{ color: '#789087', fontSize: 12, marginTop: 4 }}>{description}</p>
         </div>
-        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← Back to Overview</button>
+        <button className="back-tab-btn" onClick={() => navigate('Overview')}>← {t('navigation.backToOverview')}</button>
       </header>
-      {page === 'Live map' && <LiveMap height={520} />}
+      {page === 'Live map' && <LiveMap />}
       {page === 'Route planner' && <RoutePlanner notify={notify} />}
       {page === 'Alerts' && <AlertsList notify={notify} />}
       {page === 'Field reports' && <FieldReportForm notify={notify} />}
@@ -389,6 +396,7 @@ function Overview({ role, navigate, action, notify }) {
 
 function Dashboard({ role, exit }) {
   const { user, initialsFrom } = useAuth();
+  const { t } = useTranslation();
   const [page, setPage] = useState('Overview');
   const [menu, setMenu] = useState(false);
   const [read, setRead] = useState(false);
@@ -399,7 +407,7 @@ function Dashboard({ role, exit }) {
   const userCopy = roleCopy[role];
   const profile = roles.find(item => item.id === role) || roles[0];
   const initials = initialsFrom(user.name);
-  const detail = [profile.label, user.district || user.organisation || user.vehicleNumber].filter(Boolean).join(' • ');
+  const detail = [t(`auth.role_${role}`) || profile.label, user.district || user.organisation || user.vehicleNumber].filter(Boolean).join(' • ');
   const notify = message => { setToast(message); setTimeout(() => setToast(''), 2600); };
   const navigate = next => { setPage(next); setMenu(false); };
   const action = () => { if (role === 'field') navigate('Field reports'); else navigate('Route planner'); };
@@ -415,18 +423,33 @@ function Dashboard({ role, exit }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const getTranslatedNav = (name) => {
+    const map = {
+      'Overview': t('navigation.overview'),
+      'Route planner': t('navigation.routePlanner'),
+      'Live map': t('navigation.liveMap'),
+      'Alerts': t('navigation.alerts'),
+      'Profile': t('navigation.profile'),
+      'Settings': t('navigation.settings'),
+      'Logistics Overview': t('navigation.overview'),
+      'Cargo shipments': t('navigation.cargoShipments'),
+      'Fleet tracking': t('navigation.fleetTracking'),
+    };
+    return map[name] || name;
+  };
+
   return <div className={`workspace ${darkMode ? 'dark-mode' : ''}`}>
     <aside className={`side ${menu ? 'open' : ''}`}>
       <div className="side-brand"><Brand/><button onClick={() => setMenu(false)} aria-label="Close navigation"><Icon n="close"/></button></div>
       <div className="role-chip static">
         <span><Icon n={profile.icon} s={16}/></span>
-        <div><b>{profile.label}</b><small>Your Workspace</small></div>
+        <div><b>{t(`auth.role_${profile.id}`) || profile.label}</b><small>{t('navigation.workspace')}</small></div>
       </div>
-      <nav>{navForRole(role).map(([name, icon]) => <button className={page === name ? 'active' : ''} onClick={() => navigate(name)} key={name}><Icon n={icon} s={19}/>{name}{name === 'Alerts' && !read && <i>•</i>}</button>)}</nav>
+      <nav>{navForRole(role).map(([name, icon]) => <button className={page === name ? 'active' : ''} onClick={() => navigate(name)} key={name}><Icon n={icon} s={19}/>{getTranslatedNav(name)}{name === 'Alerts' && !read && <i>•</i>}</button>)}</nav>
       <div className="side-bottom">
-        <button onClick={() => navigate('Settings')}><Icon n="settings" s={18}/>Settings</button>
+        <button onClick={() => navigate('Settings')}><Icon n="settings" s={18}/>{t('navigation.settings')}</button>
         <button className="profile" onClick={() => navigate('Profile')} aria-label="Open profile"><span>{initials}</span><div><b>{user.name}</b><small>{detail}</small></div></button>
-        <button className="side-signout-btn" onClick={exit}><Icon n="close" s={15}/> Sign Out</button>
+        <button className="side-signout-btn" onClick={exit}><Icon n="close" s={15}/> {t('navigation.signOut')}</button>
       </div>
     </aside>
 
@@ -434,22 +457,22 @@ function Dashboard({ role, exit }) {
       <header className="top">
         <button className="hamburger" onClick={() => setMenu(true)} aria-label="Open navigation"><Icon n="menu"/></button>
         <div className="crumb">
-          <button className="crumb-link" onClick={() => navigate('Overview')}>Workspace</button>
-          {page !== 'Overview' && <><Icon n="chevron" s={13}/><b className="crumb-current">{page}</b></>}
+          <button className="crumb-link" onClick={() => navigate('Overview')}>{t('navigation.workspace')}</button>
+          {page !== 'Overview' && <><Icon n="chevron" s={13}/><b className="crumb-current">{getTranslatedNav(page)}</b></>}
         </div>
         {page !== 'Overview' && (
           <button className="top-back-btn" onClick={() => navigate('Overview')}>
-            ← Back to Overview
+            ← {t('navigation.backToOverview')}
           </button>
         )}
         <div className="top-actions">
           <button className="top-search-btn" onClick={() => setCmdOpen(true)} title="Quick Search (Ctrl+K)">
-            🔍 Search <kbd style={{ fontSize: 9, opacity: 0.8, marginLeft: 4 }}>Ctrl+K</kbd>
+            <span className="top-btn-icon">🔍</span> <span className="top-btn-label">{t('navigation.search') || 'Search'} <kbd style={{ fontSize: 9, opacity: 0.8, marginLeft: 4 }}>Ctrl+K</kbd></span>
           </button>
           <button className="top-theme-btn" onClick={() => setDarkMode(!darkMode)} title="Toggle Night Mode">
-            {darkMode ? '☀️ Day Mode' : '🌙 Night Mode'}
+            <span className="top-btn-icon">{darkMode ? '☀️' : '🌙'}</span> <span className="top-btn-label">{darkMode ? 'Day Mode' : (t('navigation.nightMode') || 'Night Mode')}</span>
           </button>
-          <button className="ask" onClick={() => setAskModalOpen(true)}><Icon n="spark" s={16}/>Ask Sahayak</button>
+          <button className="ask" onClick={() => setAskModalOpen(true)} title="Ask Sahayak AI"><Icon n="spark" s={16}/><span className="top-btn-label">{t('navigation.askSahayak') || 'Ask Sahayak'}</span></button>
           <button className="notifications" onClick={() => { setRead(true); notify('All alerts marked as seen.'); }} aria-label="Mark alerts as seen"><Icon n="bell" s={18}/>{!read && <i/>}</button>
           <button className="top-avatar" onClick={() => navigate('Profile')} aria-label="Open profile">{initials}</button>
         </div>
@@ -458,10 +481,10 @@ function Dashboard({ role, exit }) {
         {page !== 'Profile' && <>
           <section className="welcome">
             <div><small>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'long' }).toUpperCase()} <i>•</i> {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>
-              <h1>Good day, {user.name.split(' ')[0]} <b>✦</b></h1>
-              <p>{userCopy.title}<span>{userCopy.sub}</span></p>
+              <h1>{t('dashboard.goodDay')} {user.name.split(' ')[0]} <b>✦</b></h1>
+              <p>{t('dashboard.moveWhatMatters')}<span>{t('dashboard.liveRoutingIntelligence')}</span></p>
             </div>
-            <button className="primary" onClick={action}><Icon n="plus" s={17}/>{userCopy.action}</button>
+            <button className="primary" onClick={action}><Icon n="plus" s={17}/>{t(`dashboard.${role}.action`) || userCopy.action}</button>
           </section>
           <RegionStrip navigate={navigate} />
         </>}
@@ -481,21 +504,18 @@ function Dashboard({ role, exit }) {
 const DEFAULT_SUMMARY = { activeVehicles: 8, regionAccessCoveragePct: 88, openFieldReports: 3 };
 
 function RegionStrip({ navigate }) {
-  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
-  useEffect(() => {
-    api.dashboardSummary()
-      .then((res) => { if (res && res.regionAccessCoveragePct) setSummary(res); })
-      .catch(() => setSummary(DEFAULT_SUMMARY));
-  }, []);
+  const { t } = useTranslation();
+  const [summary, setSummary] = useState(null);
+  useEffect(() => { api.dashboardSummary().then(setSummary).catch(() => {}); }, []);
   return (
     <section className="region">
-      <div><i/>Regional status <b>{summary.regionAccessCoveragePct >= 85 ? 'Stable' : summary.regionAccessCoveragePct >= 60 ? 'Watchful' : 'Disrupted'}</b></div>
+      <div><i/>{t('dashboard.regionalStatus') || 'Regional Status:'} <b>{summary ? (summary.regionAccessCoveragePct >= 85 ? (t('dashboard.stable') || 'Stable') : summary.regionAccessCoveragePct >= 60 ? (t('dashboard.watchful') || 'Watchful') : (t('dashboard.disrupted') || 'Disrupted')) : t('common.loading')}</b></div>
       <p>
-        <span><b>{summary.activeVehicles}</b> active routes</span>
-        <span><b>{summary.regionAccessCoveragePct}%</b> access coverage</span>
-        <span><b>{summary.openFieldReports}</b> need attention</span>
+        <span><b>{summary?.activeVehicles ?? '—'}</b> {t('dashboard.activeRoutes') || 'Active routes'}</span>
+        <span><b>{summary ? `${summary.regionAccessCoveragePct}%` : '—'}</b> {t('dash.coverage') || 'Access coverage'}</span>
+        <span><b>{summary?.openFieldReports ?? '—'}</b> {t('dash.open_reports') || 'Need attention'}</span>
       </p>
-      <button onClick={() => navigate('Live map')}>View live map <Icon n="arrow" s={15}/></button>
+      <button onClick={() => navigate('Live map')}>{t('dashboard.viewLiveMap') || 'View Live Map'} <Icon n="arrow" s={15}/></button>
     </section>
   );
 }
