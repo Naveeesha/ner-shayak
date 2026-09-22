@@ -84,4 +84,5 @@ function weatherCodeToText(code) {
   return 'Overcast';
 }
 
-export default { fetchNodeWeather, fetchRegionalWeatherSummary, NER_HUBS };
+const weatherService = { fetchNodeWeather, fetchRegionalWeatherSummary, NER_HUBS };
+export default weatherService;

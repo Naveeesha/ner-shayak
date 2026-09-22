@@ -2,6 +2,9 @@
 // Set REACT_APP_API_URL in your frontend .env to point at the deployed
 // backend (defaults to local dev server on :4000).
 
+import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES, computeSafetyRoute, scoreAndRecommendRoutes } from './routeCalculator';
+import { fetchNodeWeather, fetchRegionalWeatherSummary } from './weatherService';
+
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
 const TOKEN_KEY = 'ner_sahayak_token';
 
@@ -11,7 +14,7 @@ export const tokenStore = {
   clear: () => localStorage.removeItem(TOKEN_KEY),
 };
 
-function mockFallback(path) {
+async function mockFallback(path, body = {}) {
   if (path.startsWith('/dashboard/summary')) {
     return {
       activeVehicles: 8,
@@ -43,9 +46,66 @@ function mockFallback(path) {
       generatedAt: new Date().toISOString(),
     };
   }
-  if (path.startsWith('/network/nodes')) return { nodes: [] };
-  if (path.startsWith('/network/edges')) return { edges: [] };
-  if (path.startsWith('/weather')) return { weather: [] };
+
+  if (path.startsWith('/network/nodes')) return { nodes: LOCAL_NODES };
+  if (path.startsWith('/network/edges')) return { edges: LOCAL_EDGES };
+
+  if (path.startsWith('/network/compare') || path.startsWith('/network/route')) {
+    const originId = body.originId || 'guwahati';
+    const destinationId = body.destinationId || 'jorhat';
+    const cargoType = body.cargoType || 'General Cargo';
+    const weight = body.weight || 100;
+    const priority = body.priority || 'Normal';
+    const emergencyMode = !!body.emergencyMode;
+
+    const road = computeSafetyRoute(originId, destinationId, 1, 'road');
+    const railway = computeSafetyRoute(originId, destinationId, 1, 'railway');
+    const waterway = computeSafetyRoute(originId, destinationId, 1, 'waterway');
+    const air = computeSafetyRoute(originId, destinationId, 1, 'air');
+    const routes = { road, railway, waterway, air };
+
+    const recommendationResult = scoreAndRecommendRoutes(routes, { cargoType, weight, priority, emergencyMode });
+
+    if (!recommendationResult) {
+      return { error: 'No viable route found' };
+    }
+
+    return {
+      routes,
+      recommendation: {
+        mode: recommendationResult.recommendedMode,
+        reason: recommendationResult.recommendationReason,
+        score: recommendationResult.score,
+        route: recommendationResult.route
+      },
+      comparison: Object.entries(routes).map(([m, r]) => ({
+        mode: m,
+        modeLabel: m.toUpperCase(),
+        available: !!r,
+        totalDistance: r?.totalKm || 0,
+        totalTime: r?.etaMinutes || 0,
+        safetyIndex: r?.safetyIndex || 90,
+        score: r?.score || 80,
+        segments: r?.segments || r?.edges || [],
+        transfers: r?.transfers || []
+      })),
+      computedAt: new Date().toISOString()
+    };
+  }
+
+  if (path.startsWith('/weather/all')) {
+    const nodesWeather = await fetchRegionalWeatherSummary();
+    return { nodes: nodesWeather, weather: nodesWeather, fetchedAt: new Date().toISOString() };
+  }
+
+  if (path.startsWith('/weather/')) {
+    const parts = path.split('/');
+    const nodeId = parts[parts.length - 1];
+    const node = LOCAL_NODES.find((n) => n.id === nodeId) || LOCAL_NODES[0];
+    const w = await fetchNodeWeather(node.lat, node.lng);
+    return { nodeId: node.id, name: node.name, ...w };
+  }
+
   if (path.startsWith('/alerts')) return { alerts: [] };
   if (path.startsWith('/reports')) return { reports: [] };
   if (path.startsWith('/vehicles')) return { vehicles: [] };
@@ -76,9 +136,10 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
       err.status = 0;
       throw err;
     }
-    // For all other endpoints on static hosting, return fallback data
-    return mockFallback(path);
+    // For all other endpoints on static hosting or offline app, return calculated fallback data
+    return await mockFallback(path, body);
   }
+
   let data = null;
   try { data = await res.json(); } catch (_) { /* empty body */ }
   if (!res.ok) {
@@ -95,7 +156,6 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   }
   return data;
 }
-
 
 export const api = {
   // Auth

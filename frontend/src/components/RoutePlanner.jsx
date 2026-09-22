@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../services/api';
 import LiveMap from './LiveMap';
-import { NODES as LOCAL_NODES, computeSafetyRoute } from '../services/routeCalculator';
+import { NODES as LOCAL_NODES, computeSafetyRoute, scoreAndRecommendRoutes } from '../services/routeCalculator';
 import { calculateCorridorRisk } from '../services/riskService';
 
 export default function RoutePlanner({ notify }) {
@@ -49,24 +49,36 @@ export default function RoutePlanner({ notify }) {
         priority,
         emergencyMode
       });
-      setCompareResult(res);
-      notify && notify(`Multimodal comparison completed. Recommended: ${res.recommendation.mode.toUpperCase()}`);
+      if (res && res.recommendation && res.recommendation.route) {
+        setCompareResult(res);
+        notify && notify(`Multimodal comparison completed. Recommended: ${res.recommendation.mode.toUpperCase()}`);
+      } else {
+        throw new Error('Fallback to client-side multimodal calculation');
+      }
     } catch (_) {
-      // Client-side fallback computation
+      // Client-side multimodal computation
       const road = computeSafetyRoute(origin, destination, 1, 'road');
-      if (!road) {
+      const railway = computeSafetyRoute(origin, destination, 1, 'railway');
+      const waterway = computeSafetyRoute(origin, destination, 1, 'waterway');
+      const air = computeSafetyRoute(origin, destination, 1, 'air');
+      const routes = { road, railway, waterway, air };
+      const recommendationResult = scoreAndRecommendRoutes(routes, { cargoType, weight: cargoWeight || 100, priority, emergencyMode });
+
+      if (!recommendationResult || !recommendationResult.route) {
         setError('No viable safe route found between these locations.');
         setCompareResult(null);
       } else {
-        setCompareResult({
-          routes: { road, railway: null, waterway: null, air: null },
+        const res = {
+          routes,
           recommendation: {
-            mode: 'road',
-            reason: 'Offline mode active. Displaying default road route.',
-            route: road
+            mode: recommendationResult.recommendedMode,
+            reason: recommendationResult.recommendationReason,
+            score: recommendationResult.score,
+            route: recommendationResult.route
           }
-        });
-        notify && notify(`Offline road route calculated: ${road.totalKm} km`);
+        };
+        setCompareResult(res);
+        notify && notify(`Safest route calculated: ${recommendationResult.route.totalKm} km via ${recommendationResult.recommendedMode.toUpperCase()}`);
       }
     } finally {
       setBusy(false);
