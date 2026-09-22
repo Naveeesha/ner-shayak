@@ -86,10 +86,10 @@ export default function RoutePlanner({ notify }) {
   };
 
   return (
-    <div style={{ display: 'grid', gap: 20 }}>
+    <div className="planner-layout">
       {/* Route Form */}
-      <form onSubmit={plan} style={formStyle}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%' }}>
+      <form onSubmit={plan} style={formStyle} className="planner-form">
+        <div className="planner-form-row two-cols">
           <label style={labelStyle}>Origin
             <select value={origin} onChange={(e) => setOrigin(e.target.value)} style={selectStyle}>
               {cityNodes.map((n) => <option key={n.id} value={n.id}>{n.name}, {n.state}</option>)}
@@ -102,7 +102,7 @@ export default function RoutePlanner({ notify }) {
           </label>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, width: '100%' }}>
+        <div className="planner-form-row three-cols">
           <label style={labelStyle}>Cargo Type
             <select value={cargoType} onChange={(e) => setCargoType(e.target.value)} style={selectStyle}>
               <option>General Cargo</option>
@@ -125,7 +125,7 @@ export default function RoutePlanner({ notify }) {
           </label>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: 8, flexWrap: 'wrap', gap: 10 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: emergencyMode ? '#dc2626' : '#4b5563', cursor: 'pointer' }}>
             <input type="checkbox" checked={emergencyMode} onChange={(e) => setEmergencyMode(e.target.checked)} style={{ width: 18, height: 18, accentColor: '#dc2626' }} />
             🚨 Emergency Logistics Mode
@@ -143,7 +143,7 @@ export default function RoutePlanner({ notify }) {
         <div style={{ display: 'grid', gap: 18 }}>
           
           {/* Recommendation Banner */}
-          <div style={recommendationBanner(emergencyMode)}>
+          <div style={recommendationBanner(emergencyMode)} className="planner-recommendation">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
               <span style={{ fontSize: 22 }}>{emergencyMode ? '🚨' : '🧠'}</span>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>Risk-Aware Multimodal Recommendation</h3>
@@ -160,7 +160,7 @@ export default function RoutePlanner({ notify }) {
             const roadName = edgesList[0]?.road || 'NH-27';
             const riskData = calculateCorridorRisk(roadName, { precipitation: 12, condition: 'Moderate Rain' }, edgesList);
             return (
-              <div style={{ padding: '14px 18px', background: riskData.badgeBg, border: `1px solid ${riskData.badgeColor}40`, borderRadius: 10 }}>
+              <div style={{ padding: '14px 18px', background: riskData.badgeBg, border: `1px solid ${riskData.badgeColor}40`, borderRadius: 10 }} className="planner-hazards">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
                   <b style={{ fontSize: 13, color: riskData.badgeColor }}>📊 Transparent Risk Score: {riskData.riskScore} / 100 ({riskData.riskLevel} Risk)</b>
                   <span style={{ fontSize: 11, fontWeight: 800, color: riskData.badgeColor }}>Safety Index: {riskData.safetyIndex}%</span>
@@ -181,11 +181,13 @@ export default function RoutePlanner({ notify }) {
           })()}
 
           {/* Map display */}
-          <LiveMap height={340} focusRouteEdges={compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []} />
+          <div className="planner-map-slot">
+            <LiveMap height={340} focusRouteEdges={compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []} />
+          </div>
 
           {/* Multimodal Comparison Cards */}
-          <h4 style={{ fontSize: 13, color: '#374151', margin: '10px 0 0 0', fontWeight: 800 }}>Available Multimodal Options</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <h4 style={{ fontSize: 13, color: '#374151', margin: '10px 0 0 0', fontWeight: 800 }} className="planner-options-head">Available Multimodal Options</h4>
+          <div className="multimodal-cards-container">
             <ModeCard mode="road" title="ROAD" icon="🚚" route={compareResult?.routes?.road} isRecommended={compareResult?.recommendation?.mode === 'road'} />
             <ModeCard mode="railway" title="RAIL + ROAD" icon="🚂" route={compareResult?.routes?.railway} isRecommended={compareResult?.recommendation?.mode === 'railway'} />
             <ModeCard mode="waterway" title="WATERWAY + ROAD" icon="🚢" route={compareResult?.routes?.waterway} isRecommended={compareResult?.recommendation?.mode === 'waterway'} />
@@ -193,7 +195,7 @@ export default function RoutePlanner({ notify }) {
           </div>
 
           {/* Route Segments for Recommended */}
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 10 }} className="planner-segments">
             <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>RECOMMENDED ROUTE SEGMENTS</h4>
             <div style={{ display: 'grid', gap: 6 }}>
               {(compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []).map((e, i) => {
