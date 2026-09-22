@@ -196,15 +196,19 @@ export default function RoutePlanner({ notify }) {
           <div style={{ marginTop: 10 }}>
             <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>RECOMMENDED ROUTE SEGMENTS</h4>
             <div style={{ display: 'grid', gap: 6 }}>
-              {(compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []).map((e, i) => (
-                <div key={i} style={segmentStyle}>
-                  <span style={{ fontWeight: 700 }}>{e.from?.name || e.from} → {e.to?.name || e.to}</span>
-                  <span style={{ color: '#7c8f87' }}>[{(e.mode || 'road').toUpperCase()}] {e.road} · {e.km} km</span>
-                  <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
-                    {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution' : '🔴 Disrupted'}
-                  </span>
-                </div>
-              ))}
+              {(compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []).map((e, i) => {
+                const fromName = typeof e.from === 'object' ? (e.from?.name || e.from?.id || 'Origin') : String(e.from || 'Origin');
+                const toName = typeof e.to === 'object' ? (e.to?.name || e.to?.id || 'Destination') : String(e.to || 'Destination');
+                return (
+                  <div key={i} style={segmentStyle}>
+                    <span style={{ fontWeight: 700 }}>{fromName} → {toName}</span>
+                    <span style={{ color: '#7c8f87' }}>[{(e.mode || 'road').toUpperCase()}] {e.road || 'Highway Corridor'} · {e.km || 0} km</span>
+                    <span style={{ color: conditionColor(e.condition), fontWeight: 800, textTransform: 'capitalize' }}>
+                      {e.condition === 'clear' ? '🟢 Clear & Safe' : e.condition === 'caution' ? '⚠️ Caution' : '🔴 Disrupted'}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
