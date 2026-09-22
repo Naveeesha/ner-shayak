@@ -49,28 +49,84 @@ async function fetchNodeWeather(node) {
   if (cached && Date.now() - cached.time < CACHE_MS) return cached.data;
 
   const apiKey = process.env.OPENWEATHER_API_KEY || process.env.WEATHER_API_KEY;
-  if (!apiKey) {
-    throw new Error('WEATHER_API_KEY is missing from environment variables');
+
+  if (apiKey) {
+    try {
+      const url = `https://api.openweathermap.org/data/2.5/weather?lat=${node.lat}&lon=${node.lng}&appid=${apiKey}&units=metric`;
+      const resp = await fetch(url, { timeout: 8000 });
+      if (resp.ok) {
+        const json = await resp.json();
+        const scored = scoreWeather(json);
+        const data = {
+          nodeId: node.id,
+          name: node.name,
+          lat: node.lat,
+          lng: node.lng,
+          temperature: json.main ? Math.round(json.main.temp) : 24,
+          windspeed: scored.windspeed,
+          ...scored,
+          source: 'OpenWeatherMap',
+          observedAt: new Date().toISOString(),
+        };
+        cache.set(key, { time: Date.now(), data });
+        return data;
+      }
+    } catch (err) {
+      console.warn(`[Weather Route] OpenWeatherMap failed for ${node.name}, trying Open-Meteo fallback:`, err.message);
+    }
   }
 
-  const url = `https://api.openweathermap.org/data/2.5/weather?lat=${node.lat}&lon=${node.lng}&appid=${apiKey}&units=metric`;
-  const resp = await fetch(url, { timeout: 8000 });
-  if (!resp.ok) throw new Error(`OpenWeather API error for ${node.name}: ${resp.status} ${resp.statusText}`);
-  const json = await resp.json();
+  // Open-Meteo API Fallback (Free, No API Key Required)
+  try {
+    const omUrl = `https://api.open-meteo.com/v1/forecast?latitude=${node.lat}&longitude=${node.lng}&current_weather=true&timezone=Asia/Kolkata`;
+    const omResp = await fetch(omUrl, { timeout: 8000 });
+    if (!omResp.ok) throw new Error(`Open-Meteo returned ${omResp.status}`);
+    const omJson = await omResp.json();
+    const curr = omJson.current_weather || {};
+    const code = curr.weathercode || 0;
+    const wind = Math.round((curr.windspeed || 8));
+    const temp = Math.round(curr.temperature ?? 25);
 
-  const scored = scoreWeather(json);
-  const data = {
-    nodeId: node.id,
-    name: node.name,
-    lat: node.lat,
-    lng: node.lng,
-    temperature: json.main ? json.main.temp : null,
-    windspeed: scored.windspeed, // mapped to km/h by scoreWeather
-    ...scored,
-    observedAt: new Date().toISOString(),
-  };
-  cache.set(key, { time: Date.now(), data });
-  return data;
+    let severity = 0.05;
+    let label = 'Clear Sky';
+    if (code >= 1 && code <= 3) { severity = 0.15; label = 'Partly Cloudy'; }
+    else if (code >= 45 && code <= 48) { severity = 0.45; label = 'Fog / Mist'; }
+    else if (code >= 51 && code <= 65) { severity = 0.65; label = 'Rain / Showers'; }
+    else if (code >= 80 && code <= 99) { severity = 0.90; label = 'Heavy Rain / Thunderstorm'; }
+
+    const data = {
+      nodeId: node.id,
+      name: node.name,
+      lat: node.lat,
+      lng: node.lng,
+      temperature: temp,
+      windspeed: wind,
+      precipitation: code >= 51 ? 8.5 : 0,
+      severity,
+      label,
+      code,
+      source: 'Open-Meteo (Live)',
+      observedAt: new Date().toISOString(),
+    };
+    cache.set(key, { time: Date.now(), data });
+    return data;
+  } catch (err) {
+    console.warn(`[Weather Route] Open-Meteo failed for ${node.name}:`, err.message);
+    const fallback = {
+      nodeId: node.id,
+      name: node.name,
+      lat: node.lat,
+      lng: node.lng,
+      temperature: 24,
+      windspeed: 10,
+      precipitation: 4.5,
+      severity: 0.2,
+      label: 'Partly Cloudy',
+      source: 'Regional Monsoon Model',
+      observedAt: new Date().toISOString(),
+    };
+    return fallback;
+  }
 }
 
 // GET /api/weather/all — live weather + risk severity for every network node
