@@ -3,12 +3,6 @@
  * 
  * Evaluates candidates (ROAD, RAIL + ROAD, WATERWAY + ROAD, AIR + ROAD)
  * using a normalized multi-criteria composite decision model.
- * 
- * Criteria:
- *  1. Travel Time (ETA in minutes)
- *  2. Distance (km / fuel & vehicle wear)
- *  3. Corridor Risk (100 - safetyIndex, accounting for active weather & field disruptions)
- *  4. Transport Suitability (Cargo type, weight, priority, emergency mode, and transfer friction)
  */
 
 function scoreAndRecommendRoutes(routes = {}, options = {}) {
@@ -42,23 +36,23 @@ function scoreAndRecommendRoutes(routes = {}, options = {}) {
   const minDistance = Math.min(...distances);
   const maxDistance = Math.max(...distances);
 
-  // Determine base weights according to operational priority
-  let wTime = 0.35;
-  let wDist = 0.20;
-  let wRisk = 0.45;
+  // Base weights prioritizing safety
+  let wTime = 0.25;
+  let wDist = 0.15;
+  let wRisk = 0.60;
 
   if (isEmergency) {
-    wTime = 0.65;
-    wDist = 0.05;
-    wRisk = 0.30;
-  } else if (isHighPriority) {
     wTime = 0.50;
+    wDist = 0.10;
+    wRisk = 0.40;
+  } else if (isHighPriority) {
+    wTime = 0.35;
     wDist = 0.15;
-    wRisk = 0.35;
+    wRisk = 0.50;
   } else if (isHighValue) {
-    wTime = 0.30;
-    wDist = 0.15;
-    wRisk = 0.55;
+    wTime = 0.20;
+    wDist = 0.10;
+    wRisk = 0.70;
   }
 
   const scoredCandidates = availableModes.map((mode) => {
@@ -68,51 +62,53 @@ function scoreAndRecommendRoutes(routes = {}, options = {}) {
     const safety = r.safetyIndex !== undefined ? r.safetyIndex : 90;
     const risk = Math.max(0, 100 - safety);
 
-    // Min-Max normalization into [0, 1] range (0 is best, 1 is worst)
+    // Min-Max normalization into [0, 1] range
     const normTime = maxTime > minTime ? (time - minTime) / (maxTime - minTime) : 0;
     const normDist = maxDistance > minDistance ? (distance - minDistance) / (maxDistance - minDistance) : 0;
     const normRisk = risk / 100;
 
-    // Operational suitability adjustments (positive adds penalty, negative adds bonus)
     let suitabilityAdjustment = 0;
-
-    // Multimodal transfer friction (each transfer adds ~0.03 handling overhead)
     const transferCount = (r.transfers || []).length;
-    suitabilityAdjustment += transferCount * 0.03;
+    suitabilityAdjustment += transferCount * 0.02;
 
-    // Cargo profile adjustments
+    // Strict safety weighting: heavily penalize hazardous routes (<50% safety) and reward high safety (>90%)
+    if (safety < 50) {
+      suitabilityAdjustment += 1.50; // Heavy penalty: hazardous corridor
+    } else if (safety < 70) {
+      suitabilityAdjustment += 0.50;
+    } else if (safety >= 90) {
+      suitabilityAdjustment -= 0.30; // Safety incentive for 90%+ clear corridors
+    }
+
     if (isHeavy) {
-      if (mode === 'air') suitabilityAdjustment += 0.50; // Air is constrained for heavy bulk
-      if (mode === 'waterway') suitabilityAdjustment -= 0.18; // Waterway is optimal for bulk
-      if (mode === 'railway') suitabilityAdjustment -= 0.12; // Rail bulk efficiency
+      if (mode === 'air') suitabilityAdjustment += 0.20;
+      if (mode === 'waterway') suitabilityAdjustment -= 0.15;
+      if (mode === 'railway') suitabilityAdjustment -= 0.10;
     }
 
     if (isPerishableOrUrgent) {
-      if (mode === 'air') suitabilityAdjustment -= 0.18; // Speed preserves perishable goods
-      if (mode === 'waterway') suitabilityAdjustment += 0.30; // Waterway transit too slow
+      if (mode === 'air') suitabilityAdjustment -= 0.30;
+      if (mode === 'waterway') suitabilityAdjustment += 0.20;
     }
 
-    if (isHighValue) {
-      if (mode === 'air') suitabilityAdjustment -= 0.10; // Secured fast transport
-    }
-
-    // Composite cost (lower is better)
     const cost = (wTime * normTime) + (wDist * normDist) + (wRisk * normRisk) + suitabilityAdjustment;
-
-    // 0-100 Recommendation Score (higher is better)
     const score = Math.round(Math.max(10, Math.min(99, (1 - cost) * 100)));
+
+    let modeReason = '';
+    if (safety >= 90) {
+      modeReason = `⭐ Recommended: Highest safety index (${safety}%) with clean corridor integrity.`;
+    } else if (safety < 50) {
+      modeReason = `⚠️ High Hazard Risk: Low safety index (${safety}%) due to active weather or ground disruptions.`;
+    } else {
+      modeReason = `Moderate safety corridor (${safety}% safety index).`;
+    }
 
     return {
       mode,
       cost,
       score,
-      metrics: {
-        timeMinutes: time,
-        distanceKm: distance,
-        safetyIndex: safety,
-        transfers: transferCount,
-      },
-      route: r,
+      reason: modeReason,
+      route: { ...r, modeReason },
     };
   });
 
@@ -123,26 +119,26 @@ function scoreAndRecommendRoutes(routes = {}, options = {}) {
   const bestMode = best.mode;
   const bestRoute = routes[bestMode];
 
-  // Synthesize deterministic, human-readable rationale
   let reason = '';
-  if (isEmergency) {
+  if (bestMode === 'air') {
+    reason = `⭐ Recommended safest corridor: AIR + ROAD provides top safety index (${bestRoute.safetyIndex}%) and fastest transit time (${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m), bypassing ground disruptions.`;
+  } else if (bestRoute.safetyIndex < 50) {
+    reason = `⚠️ CAUTION: Primary corridor has elevated hazard risk (${bestRoute.safetyIndex}% safety). Recommending safest available alternative: ${bestMode.toUpperCase()} (${bestRoute.totalKm} km, ${bestRoute.safetyIndex}% safety).`;
+  } else if (isEmergency) {
     reason = `Emergency priority selected ${bestMode.toUpperCase()} (${bestRoute.totalKm} km, ${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m) to minimize transit delay with ${bestRoute.safetyIndex}% corridor safety.`;
-  } else if (isHeavy && (bestMode === 'railway' || bestMode === 'waterway')) {
-    reason = `Heavy freight profile prioritized ${bestMode === 'railway' ? 'NFR Rail' : 'IWAI Waterway'} for high-capacity bulk payload, lower logistics cost, and ${bestRoute.safetyIndex}% corridor integrity.`;
-  } else if (bestMode === 'air') {
-    reason = `Air + Road multimodal corridor delivers optimal efficiency (${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m vs road transit) with high safety index of ${bestRoute.safetyIndex}%.`;
   } else if (bestMode === 'railway') {
-    reason = `NFR Railway freight corridor selected for superior balance of transport safety (${bestRoute.safetyIndex}%), low disruption vulnerability, and reliable transit schedule.`;
+    reason = `NFR Railway freight corridor selected for superior transport safety (${bestRoute.safetyIndex}%), low disruption vulnerability, and reliable transit schedule.`;
   } else if (bestMode === 'waterway') {
     reason = `Inland Waterway corridor (NW-2/16) selected for stable river freight movement with ${bestRoute.safetyIndex}% route safety index.`;
   } else {
-    reason = `Direct highway corridor selected as the most viable and direct routing (${bestRoute.totalKm} km) with ${bestRoute.safetyIndex}% corridor safety.`;
+    reason = `Recommended safest road corridor (${bestRoute.totalKm} km) with high corridor integrity (${bestRoute.safetyIndex}% safety index).`;
   }
 
-  // Attach score directly to candidate route objects
+  // Attach score and reason directly to candidate route objects
   scoredCandidates.forEach((c) => {
     if (routes[c.mode]) {
       routes[c.mode].score = c.score;
+      routes[c.mode].modeReason = c.reason;
     }
   });
 
