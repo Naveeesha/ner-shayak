@@ -247,7 +247,10 @@ function ModeCard({ title, icon, route, isRecommended }) {
       <div style={{ display: 'grid', gap: 6 }}>
         <div style={cardRow}><span style={cardLabel}>Time:</span> <span style={{ fontWeight: 800, color: '#111827' }}>{formatMins(route.etaMinutes)}</span></div>
         <div style={cardRow}><span style={cardLabel}>Distance:</span> <span style={{ fontWeight: 700, color: '#4b5563' }}>{route.totalKm} km</span></div>
-        <div style={cardRow}><span style={cardLabel}>Safety:</span> <span style={{ fontWeight: 800, color: route.safetyIndex > 80 ? '#059669' : '#d97706' }}>{route.safetyIndex}%</span></div>
+        <div style={cardRow}><span style={cardLabel}>Safety:</span> <span style={{ fontWeight: 800, color: route.safetyIndex >= 80 ? '#059669' : route.safetyIndex >= 50 ? '#d97706' : '#dc2626' }}>{route.safetyIndex}%</span></div>
+      </div>
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(0,0,0,0.08)', fontSize: 10, color: isRecommended ? '#047857' : (route.safetyIndex < 50 ? '#dc2626' : '#6b7280'), fontWeight: 600, lineHeight: 1.4 }}>
+        {route.modeReason || (isRecommended ? 'Top safety & operational balance.' : route.safetyIndex < 50 ? '⚠️ High hazard risk detected on corridor.' : 'Alternative route option.')}
       </div>
     </div>
   );
