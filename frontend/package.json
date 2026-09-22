@@ -4,6 +4,10 @@
   "private": true,
   "homepage": ".",
   "dependencies": {
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/geolocation": "^8.2.2",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@supabase/supabase-js": "^2.116.0",
     "@turf/turf": "^7.4.0",
     "leaflet": "^1.9.4",
@@ -19,7 +23,10 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "deploy": "gh-pages -d build",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:android": "npx cap open android",
+    "cap:ios": "npx cap open ios"
   },
   "eslintConfig": {
     "extends": [
@@ -39,6 +46,9 @@
     ]
   },
   "devDependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
     "gh-pages": "^6.3.0"
   }
 }

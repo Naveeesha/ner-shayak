@@ -5,3 +5,11 @@ build/
 *.db-wal
 *.db-shm
 .env
+
+# Android build outputs
+frontend/android/.gradle/
+frontend/android/build/
+frontend/android/app/build/
+frontend/android/.idea/
+frontend/android/local.properties
+

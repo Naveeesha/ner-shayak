@@ -1,0 +1,15 @@
+{
+  "appId": "com.nerlink.app",
+  "appName": "NER-LINK Logistics",
+  "webDir": "build",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0f172a"
+    }
+  }
+}
