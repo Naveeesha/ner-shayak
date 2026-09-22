@@ -512,7 +512,7 @@ export default function FieldReportForm({ notify }) {
           <div style={rowStyle}>
             <label style={labelStyle}>
               {t('report.road') || 'Highway / Corridor Name'}
-              <input value={form.road} onChange={set('road')} type="text" placeholder="e.g. NH27 / NH29 / GS Road" style={inputStyle} />
+              <input value={form.road} onChange={set('road')} type="text" placeholder={nodes.length > 0 ? "e.g. NH27 / NH29 / GS Road" : "e.g. NH27 / NH29"} style={inputStyle} />
             </label>
             <label style={labelStyle}>
               Estimated Delay (Minutes)

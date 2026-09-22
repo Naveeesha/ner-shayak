@@ -70,7 +70,7 @@ export default function CommandPaletteModal({ isOpen, onClose, navigate }) {
     }
 
     return items;
-  }, [nodes, users, user?.role, navigate, onClose]);
+  }, [nodes, users, user?.role, navigate, onClose, t]);
 
   const q = query.toLowerCase().trim();
 

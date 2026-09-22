@@ -91,7 +91,9 @@ export default function FieldOfficerOverview({ navigate, notify }) {
         {/* My Recent Reports */}
         <section className="card" style={{ padding: '20px' }}>
           <small style={{ color: '#8aa097', fontSize: 9, fontWeight: 800 }}>{t('field.yourSubmitted') || 'RECENT NETWORK INCIDENTS'}</small>
-          <h3 style={{ margin: '6px 0 14px', fontSize: 16, color: '#25483d' }}>Live Supabase Incident Stream</h3>
+          <h3 style={{ margin: '6px 0 14px', fontSize: 16, color: '#25483d' }}>
+            Live Supabase Incident Stream {myReports.length > 0 ? `(${myReports.length} Submitted by You)` : ''}
+          </h3>
           {loading && <p style={{ fontSize: 11, color: '#7c8f87' }}>{t('field.loading') || 'Loading reports…'}</p>}
           {!loading && allReports.length === 0 && (
             <p style={{ fontSize: 11, color: '#7c8f87' }}>No incident reports found in the network database.</p>

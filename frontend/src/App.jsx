@@ -285,7 +285,7 @@ function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
     language: user.language || 'en', hub: user.hub || '', department: user.department || '',
   });
   const set = (key) => (event) => setForm((prev) => ({ ...prev, [key]: event.target.value }));
-  const languageLabel = LANGUAGES.find((item) => item.id === (user.language || 'en'))?.label;
+  const languageLabel = LANGUAGES.find((item) => item.id === (user.language || 'en'))?.label || 'English';
 
   const save = async (event) => {
     event.preventDefault();
@@ -305,7 +305,7 @@ function ProfileView({ roleMeta, initials, notify, navigate, exit }) {
       </div>
       <div className="profile-hero card">
         <span className="profile-avatar">{initials}</span>
-        <div><small>{t('profile.signedInAccount')}</small><h2>{user.name}</h2><p>{user.email}</p></div>
+        <div><small>{t('profile.signedInAccount')} · {languageLabel}</small><h2>{user.name}</h2><p>{user.email}</p></div>
         <div className="profile-role-badge"><Icon n={roleMeta.icon} s={16}/>{t(`auth.role_${roleMeta.id}`) || roleMeta.label}</div>
       </div>
       <div className="profile-grid">
