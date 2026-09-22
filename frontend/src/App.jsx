@@ -535,12 +535,22 @@ class ErrorBoundary extends Component {
       return (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: '#0e2b22', color: '#ffffff', padding: 24, textAlign: 'center', fontFamily: 'sans-serif' }}>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: 8, color: '#ccf363' }}>NER-Sahayak Intelligence Network</h2>
-          <p style={{ color: '#d2f2e5', maxWidth: 460, margin: '8px 0 24px', lineHeight: 1.5, fontSize: '0.95rem' }}>
-            An unexpected error occurred while rendering this component. Click below to reload your session safely.
+          <p style={{ color: '#d2f2e5', maxWidth: 500, margin: '8px 0 16px', lineHeight: 1.5, fontSize: '0.95rem' }}>
+            A rendering issue occurred in this section.
           </p>
-          <button onClick={() => window.location.reload()} style={{ background: '#ccf363', color: '#0e2b22', border: 'none', padding: '12px 24px', borderRadius: 8, fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
-            🔄 Reload Application
-          </button>
+          {this.state.error && (
+            <pre style={{ background: 'rgba(0,0,0,0.4)', color: '#fca5a5', padding: '10px 14px', borderRadius: 6, fontSize: 11, maxWidth: 600, overflowX: 'auto', textAlign: 'left', margin: '0 0 20px 0' }}>
+              {this.state.error.toString()}
+            </pre>
+          )}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <button onClick={() => this.setState({ hasError: false, error: null })} style={{ background: '#ccf363', color: '#0e2b22', border: 'none', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
+              ⚡ Reset View
+            </button>
+            <button onClick={() => window.location.reload()} style={{ background: 'rgba(255,255,255,0.15)', color: '#ffffff', border: '1px solid #d2f2e5', padding: '10px 20px', borderRadius: 8, fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
+              🔄 Reload Application
+            </button>
+          </div>
         </div>
       );
     }

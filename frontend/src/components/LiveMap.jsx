@@ -61,15 +61,22 @@ export default function LiveMap({ height = 440, focusRouteEdges = null }) {
       });
   }, [isOfflineMode]);
 
-  // Build the displayEdges (resolve string IDs → node objects, apply mode filter)
+  // Build the displayEdges (resolve string IDs → node objects, apply mode filter, ensure valid lat/lng)
   const displayEdges = useMemo(() => {
-    const raw = focusRouteEdges ? focusRouteEdges : edges;
-    let filtered = modeFilter === 'all' ? raw : raw.filter(e => (e.mode || 'road') === modeFilter);
+    const raw = Array.isArray(focusRouteEdges) ? focusRouteEdges : edges;
+    if (!Array.isArray(raw)) return [];
+    let filtered = modeFilter === 'all' ? raw : raw.filter(e => e && (e.mode || 'road') === modeFilter);
     return filtered.map(e => {
-      const fromNode = typeof e.from === 'string' ? nodes.find(n => n.id === e.from) : e.from;
-      const toNode   = typeof e.to   === 'string' ? nodes.find(n => n.id === e.to)   : e.to;
+      if (!e) return null;
+      let fromNode = typeof e.from === 'string' ? nodes.find(n => n.id === e.from) : e.from;
+      let toNode   = typeof e.to   === 'string' ? nodes.find(n => n.id === e.to)   : e.to;
+      if (typeof fromNode === 'string') fromNode = nodes.find(n => n.id === fromNode);
+      if (typeof toNode === 'string') toNode = nodes.find(n => n.id === toNode);
+      if (!fromNode || !toNode || fromNode.lat == null || fromNode.lng == null || toNode.lat == null || toNode.lng == null) {
+        return null;
+      }
       return { ...e, from: fromNode, to: toNode };
-    }).filter(e => e.from && e.to);
+    }).filter(Boolean);
   }, [focusRouteEdges, edges, modeFilter, nodes]);
 
   // Initialize Google Map
