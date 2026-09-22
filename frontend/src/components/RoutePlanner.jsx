@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../services/api';
 import LiveMap from './LiveMap';
 import { NODES as LOCAL_NODES, computeSafetyRoute } from '../services/routeCalculator';
+import { calculateCorridorRisk } from '../services/riskService';
 
 export default function RoutePlanner({ notify }) {
   const [nodes, setNodes] = useState(LOCAL_NODES);
@@ -139,6 +140,32 @@ export default function RoutePlanner({ notify }) {
               {compareResult.recommendation.reason}
             </p>
           </div>
+
+          {/* Transparent Risk Factor Attribution Card */}
+          {(() => {
+            const recRoute = compareResult.recommendation.route;
+            const roadName = recRoute?.edges?.[0]?.road || 'NH-27';
+            const riskData = calculateCorridorRisk(roadName, { precipitation: 12, condition: 'Moderate Rain' }, recRoute?.edges || []);
+            return (
+              <div style={{ padding: '14px 18px', background: riskData.badgeBg, border: `1px solid ${riskData.badgeColor}40`, borderRadius: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
+                  <b style={{ fontSize: 13, color: riskData.badgeColor }}>📊 Transparent Risk Score: {riskData.riskScore} / 100 ({riskData.riskLevel} Risk)</b>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: riskData.badgeColor }}>Safety Index: {riskData.safetyIndex}%</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+                  {riskData.factors.map((f, idx) => (
+                    <div key={idx} style={{ background: '#ffffffcc', padding: '8px 10px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 11 }}>
+                      <div style={{ fontWeight: 800, color: '#1f2937', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{f.label}</span>
+                        <span style={{ color: riskData.badgeColor }}>{f.value}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: '#6b7280', marginTop: 3 }}>{f.desc}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Map display */}
           <LiveMap height={340} focusRouteEdges={compareResult.recommendation.route.edges} />

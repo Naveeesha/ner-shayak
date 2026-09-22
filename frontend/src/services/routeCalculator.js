@@ -425,22 +425,22 @@ export function scoreAndRecommendRoutes(routes = {}, options = {}) {
   const minDistance = Math.min(...distances);
   const maxDistance = Math.max(...distances);
 
-  let wTime = 0.35;
-  let wDist = 0.20;
-  let wRisk = 0.45;
+  let wTime = 0.25;
+  let wDist = 0.15;
+  let wRisk = 0.60;
 
   if (isEmergency) {
-    wTime = 0.65;
-    wDist = 0.05;
-    wRisk = 0.30;
-  } else if (isHighPriority) {
     wTime = 0.50;
+    wDist = 0.10;
+    wRisk = 0.40;
+  } else if (isHighPriority) {
+    wTime = 0.35;
     wDist = 0.15;
-    wRisk = 0.35;
+    wRisk = 0.50;
   } else if (isHighValue) {
-    wTime = 0.30;
-    wDist = 0.15;
-    wRisk = 0.55;
+    wTime = 0.20;
+    wDist = 0.10;
+    wRisk = 0.70;
   }
 
   const scoredCandidates = availableModes.map((mode) => {
@@ -456,21 +456,24 @@ export function scoreAndRecommendRoutes(routes = {}, options = {}) {
 
     let suitabilityAdjustment = 0;
     const transferCount = (r.transfers || []).length;
-    suitabilityAdjustment += transferCount * 0.03;
+    suitabilityAdjustment += transferCount * 0.02;
+
+    // Heavy penalty for unsafe routes (< 50% safety)
+    if (safety < 50) {
+      suitabilityAdjustment += 0.45;
+    } else if (safety < 70) {
+      suitabilityAdjustment += 0.20;
+    }
 
     if (isHeavy) {
-      if (mode === 'air') suitabilityAdjustment += 0.50;
-      if (mode === 'waterway') suitabilityAdjustment -= 0.18;
-      if (mode === 'railway') suitabilityAdjustment -= 0.12;
+      if (mode === 'air') suitabilityAdjustment += 0.30;
+      if (mode === 'waterway') suitabilityAdjustment -= 0.15;
+      if (mode === 'railway') suitabilityAdjustment -= 0.10;
     }
 
     if (isPerishableOrUrgent) {
-      if (mode === 'air') suitabilityAdjustment -= 0.18;
-      if (mode === 'waterway') suitabilityAdjustment += 0.30;
-    }
-
-    if (isHighValue) {
-      if (mode === 'air') suitabilityAdjustment -= 0.10;
+      if (mode === 'air') suitabilityAdjustment -= 0.15;
+      if (mode === 'waterway') suitabilityAdjustment += 0.20;
     }
 
     const cost = (wTime * normTime) + (wDist * normDist) + (wRisk * normRisk) + suitabilityAdjustment;
@@ -490,18 +493,18 @@ export function scoreAndRecommendRoutes(routes = {}, options = {}) {
   const bestRoute = routes[bestMode];
 
   let reason = '';
-  if (isEmergency) {
+  if (bestRoute.safetyIndex < 50) {
+    reason = `⚠️ CAUTION: Primary route has elevated hazard risk (${bestRoute.safetyIndex}% safety). Recommending safest available alternative: ${bestMode.toUpperCase()} (${bestRoute.totalKm} km, ${bestRoute.safetyIndex}% safety).`;
+  } else if (isEmergency) {
     reason = `Emergency priority selected ${bestMode.toUpperCase()} (${bestRoute.totalKm} km, ${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m) to minimize transit delay with ${bestRoute.safetyIndex}% corridor safety.`;
-  } else if (isHeavy && (bestMode === 'railway' || bestMode === 'waterway')) {
-    reason = `Heavy freight profile prioritized ${bestMode === 'railway' ? 'NFR Rail' : 'IWAI Waterway'} for high-capacity bulk payload, lower logistics cost, and ${bestRoute.safetyIndex}% corridor integrity.`;
   } else if (bestMode === 'air') {
-    reason = `Air + Road multimodal corridor delivers optimal efficiency (${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m vs road transit) with high safety index of ${bestRoute.safetyIndex}%.`;
+    reason = `Safest multimodal corridor: AIR + ROAD provides ${bestRoute.safetyIndex}% safety index (${Math.floor(bestRoute.etaMinutes / 60)}h ${bestRoute.etaMinutes % 60}m transit time) avoiding high-risk ground disruptions.`;
   } else if (bestMode === 'railway') {
-    reason = `NFR Railway freight corridor selected for superior balance of transport safety (${bestRoute.safetyIndex}%), low disruption vulnerability, and reliable transit schedule.`;
+    reason = `NFR Railway freight corridor selected for superior transport safety (${bestRoute.safetyIndex}%), low disruption vulnerability, and reliable transit schedule.`;
   } else if (bestMode === 'waterway') {
     reason = `Inland Waterway corridor (NW-2/16) selected for stable river freight movement with ${bestRoute.safetyIndex}% route safety index.`;
   } else {
-    reason = `Direct highway corridor selected as the most viable and direct routing (${bestRoute.totalKm} km) with ${bestRoute.safetyIndex}% corridor safety.`;
+    reason = `Recommended safest road corridor (${bestRoute.totalKm} km) with high corridor integrity (${bestRoute.safetyIndex}% safety index).`;
   }
 
   scoredCandidates.forEach((c) => {
