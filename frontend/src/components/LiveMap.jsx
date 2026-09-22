@@ -3,7 +3,7 @@ import api from '../services/api';
 import { NODES as LOCAL_NODES, EDGES as LOCAL_EDGES } from '../services/routeCalculator';
 import { DRIVER_ROSTER } from '../services/driverService';
 
-const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
+const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || 'AIzaSyA6Fx4Jjsvu6ee-HPmntni9d9BSQjSx3ok';
 
 const CONDITION_COLOR = { clear: '#3ea274', caution: '#e2ab3d', disrupted: '#dc725d', blocked: '#8a1f1f' };
 const MODE_COLOR = { road: '#3ea274', railway: '#475569', waterway: '#0284c7', air: '#9333ea' };
