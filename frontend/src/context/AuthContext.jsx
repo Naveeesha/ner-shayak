@@ -98,6 +98,18 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState('');
+
+  useEffect(() => {
+    const handleSessionExpired = (e) => {
+      tokenStore.clear();
+      localStorage.removeItem('ner_sahayak_user');
+      setUser(null);
+      setSessionNotice(e.detail?.message || 'Your session has expired. Please sign in again.');
+    };
+    window.addEventListener('auth:session-expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired);
+  }, []);
 
   useEffect(() => {
     const token = tokenStore.get();
@@ -107,18 +119,31 @@ export function AuthProvider({ children }) {
         setUser(res.user);
         localStorage.setItem('ner_sahayak_user', JSON.stringify(res.user));
       })
-      .catch(() => {
+      .catch((err) => {
+        // If server explicitly returned 401 (Invalid or expired session), invalidate stale session
+        if (err && err.status === 401) {
+          tokenStore.clear();
+          localStorage.removeItem('ner_sahayak_user');
+          setUser(null);
+          setSessionNotice('Your session has expired. Please sign in again.');
+          return;
+        }
+
+        // Offline / network failure fallback for offline or demo tokens
         const cached = localStorage.getItem('ner_sahayak_user');
-        if (cached) {
-          try { setUser(JSON.parse(cached)); } catch (_) { tokenStore.clear(); }
+        if (cached && (token.startsWith('demo_token_') || token.startsWith('demo-') || err?.isNetworkError)) {
+          try { setUser(JSON.parse(cached)); } catch (_) { tokenStore.clear(); localStorage.removeItem('ner_sahayak_user'); }
         } else {
           tokenStore.clear();
+          localStorage.removeItem('ner_sahayak_user');
+          setUser(null);
         }
       })
       .finally(() => setReady(true));
   }, []);
 
   const login = useCallback(async (email, password) => {
+    setSessionNotice('');
     const cleanEmail = (email || '').toLowerCase().trim();
     const demoMatch = DEMO_USERS.find((u) => u.email.toLowerCase() === cleanEmail);
 
@@ -132,7 +157,7 @@ export function AuthProvider({ children }) {
       // If server explicitly returned 401/403 (invalid credentials on live backend)
       if (err.status === 401 || err.status === 403) {
         if (demoMatch && (password === 'sahayak123' || !password)) {
-          const mockToken = `demo_token_${Date.now()}`;
+          const mockToken = `demo_token_${demoMatch.id}_${demoMatch.role}_${Date.now()}`;
           tokenStore.set(mockToken);
           localStorage.setItem('ner_sahayak_user', JSON.stringify(demoMatch));
           setUser(demoMatch);
@@ -151,7 +176,7 @@ export function AuthProvider({ children }) {
         district: 'Kamrup Metropolitan',
         state: 'Assam',
       };
-      const mockToken = `demo_token_${Date.now()}`;
+      const mockToken = `demo_token_${fallbackUser.id}_${fallbackUser.role}_${Date.now()}`;
       tokenStore.set(mockToken);
       localStorage.setItem('ner_sahayak_user', JSON.stringify(fallbackUser));
       setUser(fallbackUser);
@@ -211,8 +236,10 @@ export function AuthProvider({ children }) {
 
   const initialsFrom = (name = '') => name.split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase() || 'U';
 
+  const clearSessionNotice = useCallback(() => setSessionNotice(''), []);
+
   return (
-    <AuthContext.Provider value={{ user, ready, login, signup, logout, updateProfile, initialsFrom }}>
+    <AuthContext.Provider value={{ user, ready, sessionNotice, clearSessionNotice, login, signup, logout, updateProfile, initialsFrom }}>
       {children}
     </AuthContext.Provider>
   );

@@ -85,6 +85,12 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
     const message = (data && data.error) || `Request failed (${res.status})`;
     const err = new Error(message);
     err.status = res.status;
+    err.code = data && data.code;
+    if (res.status === 401 && auth && !path.startsWith('/auth/login') && !path.startsWith('/auth/signup')) {
+      tokenStore.clear();
+      localStorage.removeItem('ner_sahayak_user');
+      window.dispatchEvent(new CustomEvent('auth:session-expired', { detail: { message } }));
+    }
     throw err;
   }
   return data;

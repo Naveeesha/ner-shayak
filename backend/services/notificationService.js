@@ -298,9 +298,11 @@ async function notifyFieldOfficerIncident(incident) {
 async function notifyAffectedDrivers(incident) {
   try {
     if (!incident) return { success: false };
-    const loc = incident.road || incident.nodeId || 'NER Corridor';
-    const cat = incident.category ? incident.category.replace('_', ' ') : 'Hazard';
-    const message = `ALERT: Disruption on ${loc} (${cat}). Alternate routes recommended. Check NER-Sahayak.`;
+    const loc = incident.road || incident.location || incident.nodeId || 'NH-27';
+    const cat = incident.category ? incident.category.replace(/_/g, ' ') : 'road disruption';
+    const sev = (incident.severity || 'severe').toUpperCase();
+    const altRoute = incident.altRoute || incident.alternateRoute || 'via State Highway bypass';
+    const message = `NER-LINK ALERT: ${sev} ${cat} detected on ${loc}. Your assigned route may be affected. Please avoid the affected section and follow the recommended alternate route: ${altRoute}. Check NER-LINK for details.`;
 
     const drivers = await getAffectedDriverRecipients(incident);
     const results = [];

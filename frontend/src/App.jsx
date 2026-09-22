@@ -139,7 +139,7 @@ function AuthShell({ children, intro }) {
 }
 
 function Login({ onSignup }) {
-  const { login } = useAuth();
+  const { login, sessionNotice } = useAuth();
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -171,6 +171,7 @@ function Login({ onSignup }) {
 
   return (
     <AuthShell intro={<div className="login-intro"><div className="eyebrow">{t('auth.userAccess')}</div><h2>{t('auth.signInTitle')}</h2><p>{t('auth.signInDesc')}</p></div>}>
+      {sessionNotice && <p className="form-error" role="alert" style={{ marginTop: '8px', marginBottom: '8px', background: '#fff3cd', color: '#856404', border: '1px solid #ffeeba', padding: '10px 12px', borderRadius: 6, fontSize: 12 }}>⚠️ {sessionNotice}</p>}
       <form onSubmit={submit} className="login-form">
         <label>{t('auth.workEmail')}
           <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" placeholder={t('auth.emailPlaceholder')} autoComplete="username" required/>
