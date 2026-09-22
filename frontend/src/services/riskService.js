@@ -43,22 +43,29 @@ export function calculateCorridorRisk(roadName = '', weather = null, incidents =
   }
 
   // 3. Active Corridor Incidents & Blockages
-  const activeCorridorIncidents = incidents.filter(i => {
-    if (i.status === 'resolved') return false;
+  const safeIncidents = Array.isArray(incidents) ? incidents : [];
+  const activeCorridorIncidents = safeIncidents.filter(i => {
+    if (!i || i.status === 'resolved') return false;
+    const cat = (i.category || '').toLowerCase();
     const roadMatch = i.road && roadName && (i.road.toLowerCase().includes(roadName.toLowerCase()) || roadName.toLowerCase().includes(i.road.toLowerCase()));
-    return roadMatch || i.category === 'landslide' || i.category === 'flood' || i.category === 'road_blockage';
+    return roadMatch || cat === 'landslide' || cat === 'flood' || cat === 'road_blockage';
   });
 
   if (activeCorridorIncidents.length > 0) {
     const criticals = activeCorridorIncidents.filter(i => i.severity === 'critical' || i.severity === 'major');
     const pts = criticals.length > 0 ? 30 : 18;
     score += pts;
+    const catLabels = activeCorridorIncidents
+      .map(i => (i.category || i.road || 'disruption').replace(/_/g, ' '))
+      .filter(Boolean)
+      .join(', ');
+
     factors.push({
       key: 'incidents',
       label: 'Active Disruption on Corridor',
       value: `+${pts}`,
       impact: criticals.length > 0 ? 'critical' : 'high',
-      desc: `${activeCorridorIncidents.length} active report(s) logged (${activeCorridorIncidents.map(i => i.category.replace(/_/g, ' ')).join(', ')})`,
+      desc: `${activeCorridorIncidents.length} active report(s) logged (${catLabels || 'road advisory'})`,
     });
   }
 

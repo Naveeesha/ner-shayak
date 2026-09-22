@@ -155,9 +155,10 @@ export default function RoutePlanner({ notify }) {
 
           {/* Transparent Risk Factor Attribution Card */}
           {(() => {
-            const recRoute = compareResult.recommendation.route;
-            const roadName = recRoute?.edges?.[0]?.road || 'NH-27';
-            const riskData = calculateCorridorRisk(roadName, { precipitation: 12, condition: 'Moderate Rain' }, recRoute?.edges || []);
+            const recRoute = compareResult?.recommendation?.route;
+            const edgesList = recRoute?.edges || recRoute?.segments || [];
+            const roadName = edgesList[0]?.road || 'NH-27';
+            const riskData = calculateCorridorRisk(roadName, { precipitation: 12, condition: 'Moderate Rain' }, edgesList);
             return (
               <div style={{ padding: '14px 18px', background: riskData.badgeBg, border: `1px solid ${riskData.badgeColor}40`, borderRadius: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
@@ -180,22 +181,22 @@ export default function RoutePlanner({ notify }) {
           })()}
 
           {/* Map display */}
-          <LiveMap height={340} focusRouteEdges={compareResult.recommendation.route.edges} />
+          <LiveMap height={340} focusRouteEdges={compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []} />
 
           {/* Multimodal Comparison Cards */}
           <h4 style={{ fontSize: 13, color: '#374151', margin: '10px 0 0 0', fontWeight: 800 }}>Available Multimodal Options</h4>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-            <ModeCard mode="road" title="ROAD" icon="🚚" route={compareResult.routes.road} isRecommended={compareResult.recommendation.mode === 'road'} />
-            <ModeCard mode="railway" title="RAIL + ROAD" icon="🚂" route={compareResult.routes.railway} isRecommended={compareResult.recommendation.mode === 'railway'} />
-            <ModeCard mode="waterway" title="WATERWAY + ROAD" icon="🚢" route={compareResult.routes.waterway} isRecommended={compareResult.recommendation.mode === 'waterway'} />
-            <ModeCard mode="air" title="AIR + ROAD" icon="✈️" route={compareResult.routes.air} isRecommended={compareResult.recommendation.mode === 'air'} />
+            <ModeCard mode="road" title="ROAD" icon="🚚" route={compareResult?.routes?.road} isRecommended={compareResult?.recommendation?.mode === 'road'} />
+            <ModeCard mode="railway" title="RAIL + ROAD" icon="🚂" route={compareResult?.routes?.railway} isRecommended={compareResult?.recommendation?.mode === 'railway'} />
+            <ModeCard mode="waterway" title="WATERWAY + ROAD" icon="🚢" route={compareResult?.routes?.waterway} isRecommended={compareResult?.recommendation?.mode === 'waterway'} />
+            <ModeCard mode="air" title="AIR + ROAD" icon="✈️" route={compareResult?.routes?.air} isRecommended={compareResult?.recommendation?.mode === 'air'} />
           </div>
 
           {/* Route Segments for Recommended */}
           <div style={{ marginTop: 10 }}>
             <h4 style={{ fontSize: 12, color: '#39735f', marginBottom: 8, fontWeight: 800 }}>RECOMMENDED ROUTE SEGMENTS</h4>
             <div style={{ display: 'grid', gap: 6 }}>
-              {compareResult.recommendation.route.edges.map((e, i) => (
+              {(compareResult?.recommendation?.route?.edges || compareResult?.recommendation?.route?.segments || []).map((e, i) => (
                 <div key={i} style={segmentStyle}>
                   <span style={{ fontWeight: 700 }}>{e.from?.name || e.from} → {e.to?.name || e.to}</span>
                   <span style={{ color: '#7c8f87' }}>[{(e.mode || 'road').toUpperCase()}] {e.road} · {e.km} km</span>
